@@ -1,3 +1,4 @@
+#[cfg(feature = "parking_lot")]
 extern crate parking_lot;
 
 #[macro_use]
@@ -206,7 +207,10 @@ pub mod sync {
         ptr,
         sync::{atomic::{AtomicPtr, Ordering::Relaxed}},
     };
+    #[cfg(feature = "parking_lot")]
     use parking_lot::{Once, ONCE_INIT};
+    #[cfg(not(feature = "parking_lot"))]
+    use std::sync::{Once, ONCE_INIT};
 
     #[derive(Debug)]
     pub struct OnceCell<T> {

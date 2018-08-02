@@ -7,3 +7,10 @@ rust:
 script:
   - cargo test
   - cargo test --release
+
+matrix:
+  include:
+  - rust: beta
+    script:
+    - cargo test --no-default-features
+    - cargo test --no-default-features --release
