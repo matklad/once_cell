@@ -78,7 +78,7 @@ pub mod unsync {
         }
 
         /// Gets the contents of the cell, initializing it with `f`
-        /// if cell was empty.
+        /// if the cell was empty.
         ///
         /// # Example
         /// ```
@@ -99,7 +99,7 @@ pub mod unsync {
         }
 
         /// Gets the contents of the cell, initializing it with `f` if
-        /// cell was empty. If the cell was empty and `f` failed, an
+        /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
         ///
         /// # Example
@@ -135,12 +135,12 @@ pub mod unsync {
     ///     println!("initializing");
     ///     92
     /// });
-    /// println!("A");
+    /// println!("ready");
     /// println!("{}", *lazy);
     /// println!("{}", *lazy);
     ///
-    /// // prints
-    /// //   A
+    /// // Prints:
+    /// //   ready
     /// //   initializing
     /// //   92
     /// //   92
@@ -196,7 +196,6 @@ pub mod unsync {
     /// ```
     /// # #[macro_use] extern crate once_cell;
     /// # fn main() {
-    /// use once_cell::unsync::Lazy;
     ///
     /// let hello = "Hello, World!".to_string();
     ///
@@ -229,6 +228,29 @@ pub mod sync {
     #[cfg(not(feature = "parking_lot"))]
     use std::sync::{Once, ONCE_INIT};
 
+    /// A thread-safe cell which can be written to only once.
+    ///
+    /// Unlike `::std::sync::Mutex`, a `OnceCell` provides simple `&`
+    /// references to the contents.
+    ///
+    /// # Example
+    /// ```
+    /// use once_cell::sync::OnceCell;
+    ///
+    /// static CELL: OnceCell<String> = OnceCell::INIT;
+    /// assert!(CELL.get().is_none());
+    ///
+    /// ::std::thread::spawn(|| {
+    ///     let value: &String = CELL.get_or_init(|| {
+    ///         "Hello, World!".to_string()
+    ///     });
+    ///     assert_eq!(value, "Hello, World!");
+    /// }).join().unwrap();
+    ///
+    /// let value: Option<&String> = CELL.get();
+    /// assert!(value.is_some());
+    /// assert_eq!(value.unwrap().as_str(), "Hello, World!");
+    /// ```
     #[derive(Debug)]
     pub struct OnceCell<T> {
         // Invariant 1: `inner` is written to only from within `once.call_once`.
@@ -249,11 +271,13 @@ pub mod sync {
     unsafe impl<T: Send> Send for OnceCell<T> {}
 
     impl<T> OnceCell<T> {
+        /// An empty cell, for initialization in a `const` context.
         pub const INIT: OnceCell<T> = OnceCell {
             inner: AtomicPtr::new(ptr::null_mut()),
             once: ONCE_INIT,
         };
 
+        /// Creates a new empty cell.
         pub fn new() -> OnceCell<T> {
             OnceCell {
                 inner: AtomicPtr::new(ptr::null_mut()),
@@ -261,12 +285,35 @@ pub mod sync {
             }
         }
 
+        /// Gets the reference to the underlying value. Returns `None`
+        /// if the cell is empty.
         pub fn get(&self) -> Option<&T> {
             let ptr = self.inner.load(Relaxed);
             // Safe due to Corollary 1
             unsafe { ptr.as_ref() }
         }
 
+        /// Sets the contents of this cell to `value`. Returns
+        /// `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// full.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// static CELL: OnceCell<i32> = OnceCell::INIT;
+        ///
+        /// fn main() {
+        ///     assert!(CELL.get().is_none());
+        ///
+        ///     ::std::thread::spawn(|| {
+        ///         assert_eq!(CELL.set(92), Ok(()));
+        ///     }).join().unwrap();
+        ///
+        ///     assert_eq!(CELL.set(62), Err(62));
+        ///     assert_eq!(CELL.get(), Some(&92));
+        /// }
+        /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
             let mut value = Some(value);
             self.once.call_once(|| {
@@ -279,7 +326,21 @@ pub mod sync {
             }
         }
 
-        /// Guarantees that only one `f` is  ever called.
+        /// Gets the contents of the cell, initializing it with `f`
+        /// if the cell was empty. May threads may call `get_or_init`
+        /// concurrently with different initializing functions, but
+        /// it is guaranteed that only one function will be executed.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// let value = cell.get_or_init(|| 92);
+        /// assert_eq!(value, &92);
+        /// let value = cell.get_or_init(|| unreachable!());
+        /// assert_eq!(value, &92);
+        /// ```
         pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
             self.once.call_once(|| {
                 let value = f();
@@ -305,6 +366,37 @@ pub mod sync {
         }
     }
 
+    /// A value which is initialized on the first access.
+    ///
+    /// # Example
+    /// ```
+    /// #[macro_use]
+    /// extern crate once_cell;
+    /// use once_cell::sync::Lazy;
+    /// use std::collections::HashMap;
+    ///
+    /// static HASHMAP: Lazy<HashMap<i32, String>> = sync_lazy! {
+    ///     println!("initializing");
+    ///     let mut m = HashMap::new();
+    ///     m.insert(13, "Spica".to_string());
+    ///     m.insert(74, "Hoyten".to_string());
+    ///     m
+    /// };
+    ///
+    /// fn main() {
+    ///     println!("ready");
+    ///     ::std::thread::spawn(|| {
+    ///         println!("{:?}", HASHMAP.get(&13));
+    ///     }).join().unwrap();
+    ///     println!("{:?}", HASHMAP.get(&74));
+    ///
+    ///     // Prints:
+    ///     //   ready
+    ///     //   initializing
+    ///     //   Some("Spica")
+    ///     //   Some("Hoyten")
+    /// }
+    /// ```
     #[derive(Debug)]
     pub struct Lazy<T, F: Fn() -> T = fn() -> T> {
         #[doc(hidden)]
@@ -314,6 +406,8 @@ pub mod sync {
     }
 
     impl<T, F: Fn() -> T> Lazy<T, F> {
+        /// Creates a new lazy value with the given initializing
+        /// function.
         pub fn new(f: F) -> Lazy<T, F> {
             Lazy {
                 __cell: OnceCell::new(),
@@ -321,6 +415,19 @@ pub mod sync {
             }
         }
 
+        /// Forces the evaluation of this lazy value and
+        /// returns a reference to result. This is equivalent
+        /// to the `Deref` impl, but is explicit.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::Lazy;
+        ///
+        /// let lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::force(&lazy), &92);
+        /// assert_eq!(&*lazy, &92);
+        /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
             this.__cell.get_or_init(|| (this.__init)())
         }
@@ -333,6 +440,24 @@ pub mod sync {
         }
     }
 
+    /// Creates a new lazy value initialized by the given closure block.
+    /// This macro works in const contexts.
+    /// If you need a `move` closure, use `Lazy::new` constructor function.
+    ///
+    /// # Example
+    /// ```
+    /// # #[macro_use] extern crate once_cell;
+    /// # fn main() {
+    ///
+    /// let hello = "Hello, World!".to_string();
+    ///
+    /// let lazy = sync_lazy! {
+    ///     hello.to_uppercase()
+    /// };
+    ///
+    /// assert_eq!(&*lazy, "HELLO, WORLD!");
+    /// # }
+    /// ```
     #[macro_export]
     macro_rules! sync_lazy {
         ($($block:tt)*) => {
