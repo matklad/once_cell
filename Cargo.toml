@@ -1,6 +1,6 @@
 [package]
 name = "once_cell"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 categories = [ "rust-patterns" ]
 repository = "https://github.com/matklad/once_cell"
