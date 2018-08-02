@@ -371,7 +371,7 @@ pub mod unsync {
 pub mod sync {
     use std::{
         ptr,
-        sync::{atomic::{AtomicPtr, Ordering::Relaxed}},
+        sync::{atomic::{AtomicPtr, Ordering}},
     };
     #[cfg(feature = "parking_lot")]
     use parking_lot::{Once, ONCE_INIT};
@@ -405,7 +405,6 @@ pub mod sync {
     pub struct OnceCell<T> {
         // Invariant 1: `inner` is written to only from within `once.call_once`.
         // Corollary 1: inner is written at most once.
-        // Corollary 2: all reads & writes to inner are fine with `Relaxed` ordering.
         // Invariant 2: if not null, ptr came from `Box::into_raw`.
         inner: AtomicPtr<T>,
         once: Once,
@@ -438,7 +437,7 @@ pub mod sync {
         /// Gets the reference to the underlying value. Returns `None`
         /// if the cell is empty.
         pub fn get(&self) -> Option<&T> {
-            let ptr = self.inner.load(Relaxed);
+            let ptr = self.inner.load(Ordering::Acquire);
             // Safe due to Corollary 1
             unsafe { ptr.as_ref() }
         }
@@ -502,13 +501,13 @@ pub mod sync {
         // Invariant: must be called from `self.once`.
         unsafe fn set_inner(&self, value: T) {
             let ptr = Box::into_raw(Box::new(value));
-            self.inner.store(ptr, Relaxed);
+            self.inner.store(ptr, Ordering::Release);
         }
     }
 
     impl<T> Drop for OnceCell<T> {
         fn drop(&mut self) {
-            let ptr = self.inner.load(Relaxed);
+            let ptr = self.inner.load(Ordering::Acquire);
             if !ptr.is_null() {
                 // Safe due to Corollary 2
                 drop(unsafe { Box::from_raw(ptr) })
