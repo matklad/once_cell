@@ -5,7 +5,9 @@
 [![API reference](https://docs.rs/once_cell/badge.svg)](https://docs.rs/once_cell/)
 
 A macroless alternative to [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs).
-If you like this, you might also like [`lazycell`](https://github.com/indiv0/lazycell/)
+If you like this, you might also like [`lazycell`](https://github.com/indiv0/lazycell/).
+
+Note that this crate requires at least rustc 1.29 (beta at the time of writing).
 
 ```rust
 fn hashmap() -> &'static HashMap<u32, &'static str> {
@@ -20,7 +22,7 @@ fn hashmap() -> &'static HashMap<u32, &'static str> {
 }
 ```
 
-If you want slightly sweeter syntax, we have macros as well!
+If you want slightly sweeter syntax, we have macros too!
 
 ```rust
 static HASHMAP: Lazy<HashMap<u32, &'static str>> = sync_lazy! {
