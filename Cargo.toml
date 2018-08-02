@@ -2,12 +2,15 @@
 name = "once_cell"
 version = "0.1.0"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
-categories = [ "rust-patterns" ]
-repository = "https://github.com/matklad/once_cell"
-description = """
-Lazy and lazy static values without macros
-"""
 license = "MIT OR Apache-2.0"
+
+description = "Single assignment cells and lazy static values without macros."
+readme = "README.md"
+documentation = "https://docs.rs/once_cell"
+
+repository = "https://github.com/matklad/once_cell"
+keywords = ["lazy", "static"]
+categories = [ "rust-patterns", "memory-management" ]
 
 [dependencies]
 parking_lot = { version = "0.6.3", optional = true }
