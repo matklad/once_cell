@@ -133,6 +133,24 @@ impl Ctx {
 }
 ```
 
+# Comparison with std
+
+|`!Sync` types         | Access Mode            | Drawbacks                                     |
+|----------------------|------------------------|-----------------------------------------------|
+|`Cell<T>`             | `T`                    | works only with `Copy` types                  |
+|`RefCel<T>`           | `RefMut<T>` / `Ref<T>` | may panic at runtime                          |
+|`unsync::OnceCell<T>` | `&T`                   | assignable only once                          |
+
+|`Sync` types          | Access Mode            | Drawbacks                                     |
+|----------------------|------------------------|-----------------------------------------------|
+|`AtomicT`             | `T`                    | works only with certain `Copy` types          |
+|`Mutex<T>`            | `MutexGuard<T>`        | may deadlock at runtime, may block the thread |
+|`sync::OnceCell<T>`   | `&T`                   | assignable only once, may block the thread    |
+
+Technically, calling `get_or_init` will also cause a panic or a deadlock if it recursively calls
+itself. However, because the assignment can happen only once, such cases should be more rare than
+equivalents with `RefCell` and `Mutex`.
+
 # Implementation details
 
 Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs/) and
