@@ -26,7 +26,7 @@ or `MutexGuard<T>`.
 ## Safe Initialization of global data
 
 
-```rust,
+```rust
 use std::{env, io};
 use once_cell::sync::OnceCell;
 
@@ -43,7 +43,6 @@ impl Logger {
 
     fn from_cli(args: env::Args) -> Result<Logger, io::Error> {
        // ...
-#      Ok(Logger {})
     }
 }
 

@@ -44,11 +44,10 @@ impl Logger {
     }
 }
 
-fn main() -> Result<(), io::Error> {
-    let logger = Logger::from_cli(env::args())?;
+fn main() {
+    let logger = Logger::from_cli(env::args()).unwrap();
     INSTANCE.set(logger).unwrap();
     // use `Logger::global()` from now on
-    Ok(())
 }
 ```
 
@@ -113,7 +112,7 @@ If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
 ```
-use std::{fs, io, path::PathBuf};
+use std::{fs, io::{self, Read}, path::PathBuf};
 use once_cell::unsync::OnceCell;
 
 struct Ctx {
@@ -123,8 +122,11 @@ struct Ctx {
 
 impl Ctx {
     pub fn get_config(&self) -> Result<&str, io::Error> {
-        let cfg = self.config.get_or_try_init(|| {
-            fs::read_to_string(&self.config_path)
+        let cfg = self.config.get_or_try_init(|| -> Result<String, io::Error> {
+            let mut buf = String::new();
+            fs::File::open(&self.config_path)?
+                .read_to_string(&mut buf)?;
+            Ok(buf)
         })?;
         Ok(cfg.as_str())
     }
