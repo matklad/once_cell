@@ -9,5 +9,5 @@ Lazy and lazy static values without macros
 """
 license = "MIT OR Apache-2.0"
 
-[features]
-beta = []
+[dependencies]
+parking_lot = "0.6.3"

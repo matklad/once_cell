@@ -37,7 +37,6 @@ fn unsync_once_cell() {
 }
 
 #[test]
-#[cfg(feature = "beta")]
 fn sync_once_cell() {
     let c = sync::OnceCell::new();
     assert!(c.get().is_none());
@@ -67,7 +66,6 @@ fn unsync_once_cell_drop() {
 }
 
 #[test]
-#[cfg(feature = "beta")]
 fn sync_once_cell_drop() {
     static DROP_CNT: AtomicUsize = AtomicUsize::new(0);
     struct Dropper;
@@ -106,7 +104,6 @@ fn unsync_lazy_macro() {
 }
 
 #[test]
-#[cfg(feature = "beta")]
 fn sync_lazy_macro() {
     let called = AtomicUsize::new(0);
     let x = sync_lazy! {
@@ -138,10 +135,9 @@ fn static_lazy() {
         xs
     };
     go(|| {
-        #[cfg(feature = "beta")]
         assert_eq!(&*XS, &vec![1, 2, 3]);
     });
-    assert_eq!(XS.deref_static(), &vec![1, 2, 3]);
+    assert_eq!(&*XS, &vec![1, 2, 3]);
 }
 
 #[test]
