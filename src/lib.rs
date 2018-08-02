@@ -101,10 +101,10 @@ pub mod sync {
 
     #[derive(Debug)]
     pub struct OnceCell<T> {
-        // Invariant: `inner` is written to only from within `once`.
-        // Corollary: inner is written at most once.
-        // Corollary: all reads & writes to inner are fine with `Relaxed` ordering.
-        // Invariant: if not null, ptr came from `Box::into_raw`.
+        // Invariant 1: `inner` is written to only from within `once.call_once`.
+        // Corollary 1: inner is written at most once.
+        // Corollary 2: all reads & writes to inner are fine with `Relaxed` ordering.
+        // Invariant 2: if not null, ptr came from `Box::into_raw`.
         inner: AtomicPtr<T>,
         once: Once,
     }
@@ -133,7 +133,7 @@ pub mod sync {
 
         pub fn get(&self) -> Option<&T> {
             let ptr = self.inner.load(Relaxed);
-            // Safe due to Corollary
+            // Safe due to Corollary 1
             unsafe { ptr.as_ref() }
         }
 
@@ -169,7 +169,7 @@ pub mod sync {
         fn drop(&mut self) {
             let ptr = self.inner.load(Relaxed);
             if !ptr.is_null() {
-                // Safe due to Corollary
+                // Safe due to Corollary 2
                 drop(unsafe { Box::from_raw(ptr) })
             }
         }
