@@ -25,11 +25,20 @@ fn hashmap() -> &'static HashMap<u32, &'static str> {
 }
 
 fn main() {
-    // First access to `HASHMAP` initializes it
-    println!("The entry for `0` is \"{}\".", HASHMAP.get(&0).unwrap());
+    #[cfg(feature = "beta")]
+    {
+        // First access to `HASHMAP` initializes it
+        println!("The entry for `0` is \"{}\".", HASHMAP.get(&0).unwrap());
 
-    // Any further access to `HASHMAP` just returns the computed value
-    println!("The entry for `1` is \"{}\".", HASHMAP.get(&1).unwrap());
+        // Any further access to `HASHMAP` just returns the computed value
+        println!("The entry for `1` is \"{}\".", HASHMAP.get(&1).unwrap());
+    }
+
+    #[cfg(not(feature = "beta"))]
+    {
+        println!("The entry for `0` is \"{}\".", HASHMAP.deref_static().get(&0).unwrap());
+        println!("The entry for `1` is \"{}\".", HASHMAP.deref_static().get(&1).unwrap());
+    }
 
     println!("\nThe entry for `0` is \"{}\".", hashmap().get(&0).unwrap());
     println!("The entry for `1` is \"{}\".", hashmap().get(&1).unwrap());

@@ -2,7 +2,10 @@ language: rust
 
 matrix:
   include:
-    - rust: beta
+    - rust: stable
       script:
         - cargo test
-        - cargo test --release
+    - rust: beta
+      script:
+        - cargo test --features beta
+        - cargo test --features beta --release

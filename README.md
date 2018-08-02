@@ -7,8 +7,6 @@
 A macroless alternative to [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs).
 If you like this, you might also like [`lazycell`](https://github.com/indiv0/lazycell/).
 
-Note that this crate requires at least rustc 1.29 (beta at the time of writing).
-
 ```rust
 fn hashmap() -> &'static HashMap<u32, &'static str> {
     static INSTANCE: OnceCell<HashMap<u32, &'static str>> = OnceCell::INIT;
@@ -33,3 +31,7 @@ static HASHMAP: Lazy<HashMap<u32, &'static str>> = sync_lazy! {
     m
 };
 ```
+
+Note that this crate requires at least rustc 1.29 and the `beta` Cargo feature to enable full API.
+Without it, `sync::Lazy` works only in static contexts and requires explicit `.deref_static` call
+for dereference.

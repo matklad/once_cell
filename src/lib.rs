@@ -94,7 +94,6 @@ pub mod sync {
     use std::{
         ptr,
         sync::{Once, atomic::{AtomicPtr, Ordering::Relaxed}},
-        ops::Deref,
     };
 
     #[derive(Debug)]
@@ -135,6 +134,7 @@ pub mod sync {
             unsafe { ptr.as_ref() }
         }
 
+        #[cfg(feature = "beta")]
         pub fn set(&self, value: T) -> Result<(), T> {
             let mut value = Some(value);
             self.once.call_once(|| {
@@ -147,8 +147,32 @@ pub mod sync {
             }
         }
 
+        #[cfg(not(feature = "beta"))]
+        pub fn set(&'static self, value: T) -> Result<(), T> {
+            let mut value = Some(value);
+            self.once.call_once(|| {
+                let value = value.take().unwrap();
+                unsafe { self.set_inner(value) }
+            });
+            match value {
+                None => Ok(()),
+                Some(value) => Err(value)
+            }
+        }
+
         /// Guarantees that only one `f` is  ever called.
+        #[cfg(feature = "beta")]
         pub fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
+            self.once.call_once(|| {
+                let value = f();
+                unsafe { self.set_inner(value); }
+            });
+            self.get().unwrap()
+        }
+
+        /// Guarantees that only one `f` is  ever called.
+        #[cfg(not(feature = "beta"))]
+        pub fn get_or_init(&'static self, f: impl FnOnce() -> T) -> &T {
             self.once.call_once(|| {
                 let value = f();
                 unsafe { self.set_inner(value); }
@@ -188,9 +212,16 @@ pub mod sync {
                 __init: f,
             }
         }
+
+        // TODO: not the best idea to have a `get` on deref,
+        // but everything else would be ugly :(
+        pub fn deref_static(&'static self) -> &'static T {
+            self.__cell.get_or_init(|| (self.__init)())
+        }
     }
 
-    impl<T, F: Fn() -> T> Deref for Lazy<T, F> {
+    #[cfg(feature = "beta")]
+    impl<T, F: Fn() -> T> ::std::ops::Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             self.__cell.get_or_init(|| (self.__init)())
