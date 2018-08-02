@@ -85,6 +85,18 @@ fn sync_once_cell_drop() {
 }
 
 #[test]
+fn unsync_once_cell_drop_empty() {
+    let x = unsync::OnceCell::<String>::new();
+    drop(x);
+}
+
+#[test]
+fn sync_once_cell_drop_empty() {
+    let x = sync::OnceCell::<String>::new();
+    drop(x);
+}
+
+#[test]
 fn unsync_lazy_macro() {
     let called = Cell::new(0);
     let x = unsync_lazy! {

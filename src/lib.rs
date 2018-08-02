@@ -168,9 +168,9 @@ pub mod sync {
     impl<T> Drop for OnceCell<T> {
         fn drop(&mut self) {
             let ptr = self.inner.load(Relaxed);
-            // Safe due to Corollary
-            unsafe {
-                drop(Box::from_raw(ptr))
+            if !ptr.is_null() {
+                // Safe due to Corollary
+                drop(unsafe { Box::from_raw(ptr) })
             }
         }
     }
