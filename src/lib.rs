@@ -7,6 +7,7 @@ pub mod unsync {
         cell::UnsafeCell,
     };
 
+    /// A cell which can be written two only once. Not thread safe.
     #[derive(Debug, Default)]
     pub struct OnceCell<T> {
         // Invariant: written to at most once.
@@ -16,15 +17,21 @@ pub mod unsync {
     impl<T> OnceCell<T> {
         pub const INIT: OnceCell<T> = OnceCell { inner: UnsafeCell::new(None) };
 
+        /// Creates a new empty cell.
         pub fn new() -> OnceCell<T> {
             OnceCell { inner: UnsafeCell::new(None) }
         }
 
+        /// Gets the reference to the underlying value.
+        /// Returns `None` if the cell is empty.
         pub fn get(&self) -> Option<&T> {
             // Safe due to `inner`'s invariant
             unsafe { &*self.inner.get() }.as_ref()
         }
 
+        /// Sets the contents of this cell to `value`.
+        /// Returns `Ok(())` if the cell was empty and
+        /// `Err(value)` if it was full.
         pub fn set(&self, value: T) -> Result<(), T> {
             let slot = unsafe { &mut *self.inner.get() };
             if slot.is_some() {
@@ -38,6 +45,8 @@ pub mod unsync {
             Ok(())
         }
 
+        /// Gets the contents of the cell, initializing it with
+        /// `f` if the cell was empty.
         pub fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
             enum Void {}
             match self.get_or_try_init(|| Ok::<T, Void>(f())) {
