@@ -162,12 +162,29 @@ pub mod unsync {
                 __init: init,
             }
         }
+
+        /// Forces the evaluation of this lazy value and
+        /// returns a reference to result. This is equivalent
+        /// to the `Deref` impl, but is explicit.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::Lazy;
+        ///
+        /// let lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::force(&lazy), &92);
+        /// assert_eq!(&*lazy, &92);
+        /// ```
+        pub fn force(this: &Lazy<T, F>) -> &T {
+            this.__cell.get_or_init(|| (this.__init)())
+        }
     }
 
     impl<T, F: Fn() -> T> Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
-            self.__cell.get_or_init(|| (self.__init)())
+            Lazy::force(self)
         }
     }
 
@@ -303,12 +320,16 @@ pub mod sync {
                 __init: f,
             }
         }
+
+        pub fn force(this: &Lazy<T, F>) -> &T {
+            this.__cell.get_or_init(|| (this.__init)())
+        }
     }
 
     impl<T, F: Fn() -> T> ::std::ops::Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
-            self.__cell.get_or_init(|| (self.__init)())
+            Lazy::force(self)
         }
     }
 
