@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate once_cell;
+extern crate crossbeam_utils;
+
+use crossbeam_utils::thread::scope;
 
 use std::{
     mem,
@@ -171,4 +174,29 @@ fn static_lazy_no_macros() {
 fn sync_once_cell_is_sync_send() {
     fn assert_traits<T: Send + Sync>() {}
     assert_traits::<sync::OnceCell<String>>();
+}
+
+#[test]
+fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
+    let n_tries = 100;
+    let n_readers = 10;
+    let n_writers = 3;
+    const MSG: &str = "Hello, World";
+
+    for _ in 0..n_tries {
+        let cell: sync::OnceCell<String> = sync::OnceCell::INIT;
+        scope(|scope| {
+            for _ in 0..n_readers {
+                scope.spawn(|| loop {
+                    if let Some(msg) = cell.get() {
+                        assert_eq!(msg, MSG);
+                        break;
+                    }
+                });
+            }
+            for _ in 0..n_writers {
+                scope.spawn(|| cell.set(MSG.to_owned()));
+            }
+        })
+    }
 }
