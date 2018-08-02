@@ -14,7 +14,6 @@ pub mod unsync {
     ///
     /// # Example
     /// ```
-    /// # extern crate once_cell;
     /// use once_cell::unsync::OnceCell;
     ///
     /// let cell = OnceCell::new();
@@ -54,7 +53,6 @@ pub mod unsync {
         ///
         /// # Example
         /// ```
-        /// # extern crate once_cell;
         /// use once_cell::unsync::OnceCell;
         ///
         /// let cell = OnceCell::new();
@@ -83,7 +81,6 @@ pub mod unsync {
         ///
         /// # Example
         /// ```
-        /// # extern crate once_cell;
         /// use once_cell::unsync::OnceCell;
         ///
         /// let cell = OnceCell::new();
@@ -92,7 +89,7 @@ pub mod unsync {
         /// let value = cell.get_or_init(|| unreachable!());
         /// assert_eq!(value, &92);
         /// ```
-        pub fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
+        pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
             enum Void {}
             match self.get_or_try_init(|| Ok::<T, Void>(f())) {
                 Ok(val) => val,
@@ -106,7 +103,6 @@ pub mod unsync {
         ///
         /// # Example
         /// ```
-        /// # extern crate once_cell;
         /// use once_cell::unsync::OnceCell;
         ///
         /// let cell = OnceCell::new();
@@ -132,7 +128,6 @@ pub mod unsync {
     ///
     /// # Example
     /// ```
-    /// # extern crate once_cell;
     /// use once_cell::unsync::Lazy;
     ///
     /// let lazy: Lazy<i32> = Lazy::new(|| {
@@ -264,7 +259,7 @@ pub mod sync {
         }
 
         /// Guarantees that only one `f` is  ever called.
-        pub fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
+        pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
             self.once.call_once(|| {
                 let value = f();
                 unsafe { self.set_inner(value); }
