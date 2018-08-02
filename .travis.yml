@@ -1,0 +1,8 @@
+language: rust
+
+matrix:
+  include:
+    - rust: beta
+      script:
+        - cargo test
+        - cargo test --release
