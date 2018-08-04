@@ -31,22 +31,22 @@ use std::{
 /// ```
 #[derive(Debug)]
 pub struct OnceCell<T> {
-    value: AtomicPtr<T>,
     once: Once,
+    value: AtomicPtr<T>,
 }
 
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
-        value: AtomicPtr::new(ptr::null_mut()),
         once: ONCE_INIT,
+        value: AtomicPtr::new(ptr::null_mut()),
     };
 
     /// Creates a new empty cell.
     pub fn new() -> OnceCell<T> {
         OnceCell {
-            value: AtomicPtr::new(ptr::null_mut()),
             once: Once::new(),
+            value: AtomicPtr::new(ptr::null_mut()),
         }
     }
 
