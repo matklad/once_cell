@@ -177,6 +177,33 @@ fn sync_once_cell_is_sync_send() {
 }
 
 #[test]
+fn eval_once_macro() {
+    macro_rules! eval_once {
+        (|| -> $ty:ty {
+            $($body:tt)*
+        }) => {{
+            static ONCE_CELL: sync::OnceCell<$ty> = sync::OnceCell::INIT;
+            fn init() -> $ty {
+                $($body)*
+            }
+            ONCE_CELL.get_or_init(init)
+        }};
+    }
+
+    let fib: &'static Vec<i32> = eval_once! {
+        || -> Vec<i32> {
+            let mut res = vec![1, 1];
+            for i in 0..10 {
+                let next = res[i] + res[i + 1];
+                res.push(next);
+            }
+            res
+        }
+    };
+    assert_eq!(fib[5], 8)
+}
+
+#[test]
 fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
     let n_tries = 100;
     let n_readers = 10;
