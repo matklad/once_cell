@@ -1,8 +1,8 @@
 use std::{
-    ptr,
+    cell::UnsafeCell,
     sync::{
         Once, ONCE_INIT,
-        atomic::{AtomicPtr, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
 };
 
@@ -32,29 +32,41 @@ use std::{
 #[derive(Debug)]
 pub struct OnceCell<T> {
     once: Once,
-    value: AtomicPtr<T>,
+    value: UnsafeCell<Option<T>>,
+    is_initialized: AtomicBool,
 }
 
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
         once: ONCE_INIT,
-        value: AtomicPtr::new(ptr::null_mut()),
+        value: UnsafeCell::new(None),
+        is_initialized: AtomicBool::new(false),
     };
 
     /// Creates a new empty cell.
     pub fn new() -> OnceCell<T> {
         OnceCell {
             once: Once::new(),
-            value: AtomicPtr::new(ptr::null_mut()),
+            value: UnsafeCell::new(None),
+            is_initialized: AtomicBool::new(false),
         }
     }
 
     /// Gets the reference to the underlying value. Returns `None`
     /// if the cell is empty.
     pub fn get(&self) -> Option<&T> {
-        let ptr = self.value.load(Ordering::Acquire);
-        unsafe { ptr.as_ref() }
+        // This might be a hot path, so use `Acquire` here.
+        // It synchronizes with the corresponding `SeqCst`
+        // in `set_inner`, which ensures that, when we read the
+        // `T` out of the slot below, it was indeed fully written
+        // by `set_inner`.
+        if self.is_initialized.load(Ordering::Acquire) {
+            let slot: &Option<T> = unsafe { &*self.value.get() };
+            slot.as_ref()
+        } else {
+            None
+        }
     }
 
     /// Sets the contents of this cell to `value`. Returns
@@ -113,17 +125,20 @@ impl<T> OnceCell<T> {
         self.get().unwrap()
     }
 
+    // Unsafe, because must be guarded by `self.once`.
     unsafe fn set_inner(&self, value: T) {
-        let ptr = Box::into_raw(Box::new(value));
-        self.value.store(ptr, Ordering::Release);
+        let slot: &mut Option<T> = &mut *self.value.get();
+        *slot = Some(value);
+        // This is a cold path, so, while `Release` should be enough,
+        // there's no reason not to use `SeqCst`.
+        self.is_initialized.store(true, Ordering::SeqCst);
     }
 }
 
-impl<T> Drop for OnceCell<T> {
-    fn drop(&mut self) {
-        let ptr = self.value.load(Ordering::Acquire);
-        if !ptr.is_null() {
-            drop(unsafe { Box::from_raw(ptr) })
-        }
-    }
-}
+// Why do we need `T: Send`?
+// Thread A creates a `OnceCell` and shares it with
+// scoped thread B, which fills the cell, which is
+// then destroyed by A. That is, destructor observes
+// a sent value.
+unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
+unsafe impl<T: Send> Send for OnceCell<T> {}
