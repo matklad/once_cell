@@ -12,6 +12,8 @@ repository = "https://github.com/matklad/once_cell"
 keywords = ["lazy", "static"]
 categories = [ "rust-patterns", "memory-management" ]
 
+exclude = ["*.png", "*.svg"]
+
 [dependencies]
 parking_lot = { version = "0.6.3", optional = true, default_features = false }
 
