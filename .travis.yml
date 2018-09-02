@@ -2,7 +2,7 @@ language: rust
 rust:
   - stable
   - beta
-  - 1.25.0
+  - 1.26.0
 
 script:
   - cargo test
