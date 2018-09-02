@@ -198,10 +198,16 @@ pub mod unsync {
     /// assert_eq!(value, "Hello, World!");
     /// assert!(cell.get().is_some());
     /// ```
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub struct OnceCell<T> {
         // Invariant: written to at most once.
         inner: UnsafeCell<Option<T>>,
+    }
+
+    impl<T> Default for OnceCell<T> {
+        fn default() -> OnceCell<T> {
+            OnceCell::new()
+        }
     }
 
     impl<T> OnceCell<T> {

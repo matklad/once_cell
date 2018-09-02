@@ -32,6 +32,12 @@ pub struct OnceCell<T> {
     value: UnsafeCell<Option<T>>,
 }
 
+impl<T> Default for OnceCell<T> {
+    fn default() -> OnceCell<T> {
+        OnceCell::new()
+    }
+}
+
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
