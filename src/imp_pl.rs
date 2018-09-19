@@ -38,6 +38,20 @@ impl<T> Default for OnceCell<T> {
     }
 }
 
+impl<T: Clone> Clone for OnceCell<T> {
+    fn clone(&self) -> OnceCell<T> {
+        let value = self.get();
+        let res = OnceCell::new();
+        if let Some(value) = value {
+            match res.set(value.clone()) {
+                Ok(()) => (),
+                Err(_) => unreachable!(),
+            };
+        }
+        res
+    }
+}
+
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
