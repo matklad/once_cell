@@ -210,6 +210,19 @@ pub mod unsync {
         }
     }
 
+    impl<T: Clone> Clone for OnceCell<T> {
+        fn clone(&self) -> OnceCell<T> {
+            let res = OnceCell::new();
+            if let Some(value) = self.get() {
+                match res.set(value.clone()) {
+                    Ok(()) => (),
+                    Err(_) => unreachable!(),
+                }
+            }
+            res
+        }
+    }
+
     impl<T> OnceCell<T> {
         /// An empty cell, for initialization in a `const` context.
         pub const INIT: OnceCell<T> = OnceCell { inner: UnsafeCell::new(None) };
