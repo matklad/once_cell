@@ -177,7 +177,6 @@ mod imp;
 pub mod unsync {
     use std::ops::Deref;
     use std::cell::UnsafeCell;
-    use std::hash::{Hash, Hasher};
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -225,12 +224,6 @@ pub mod unsync {
     impl<T: PartialEq> PartialEq for OnceCell<T> {
         fn eq(&self, other: &Self) -> bool {
             self.get() == other.get()
-        }
-    }
-
-    impl<T: Hash> Hash for OnceCell<T> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            self.get().hash(state);
         }
     }
 
