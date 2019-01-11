@@ -237,3 +237,24 @@ fn unsync_clone() {
     let c = s.clone();
     assert_eq!(c.get().map(String::as_str), Some("hello"));
 }
+
+#[test]
+fn from_impl() {
+    assert_eq!(sync::OnceCell::from("value").get(), Some(&"value"));
+    assert_eq!(unsync::OnceCell::from("value").get(), Some(&"value"));
+    assert_ne!(sync::OnceCell::from("foo").get(), Some(&"bar"));
+    assert_ne!(unsync::OnceCell::from("foo").get(), Some(&"bar"));
+}
+
+#[test]
+fn partialeq_impl() {
+    assert!(sync::OnceCell::from("value") == sync::OnceCell::from("value"));
+    assert!(sync::OnceCell::from("foo") != sync::OnceCell::from("bar"));
+    assert!(unsync::OnceCell::from("value") == unsync::OnceCell::from("value"));
+    assert!(unsync::OnceCell::from("foo") != unsync::OnceCell::from("bar"));
+
+    assert!(sync::OnceCell::<String>::new() == sync::OnceCell::new());
+    assert!(sync::OnceCell::<String>::new() != sync::OnceCell::from("value".to_owned()));
+    assert!(unsync::OnceCell::<String>::new() == unsync::OnceCell::new());
+    assert!(unsync::OnceCell::<String>::new() != unsync::OnceCell::from("value".to_owned()));
+}
