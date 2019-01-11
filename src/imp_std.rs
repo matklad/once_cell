@@ -1,10 +1,6 @@
-use std::{
-    cell::UnsafeCell,
-    sync::{
-        Once, ONCE_INIT,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::cell::UnsafeCell;
+use std::sync::{Once, ONCE_INIT};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A thread-safe cell which can be written to only once.
 ///
@@ -37,8 +33,8 @@ pub struct OnceCell<T> {
 }
 
 impl<T> Default for OnceCell<T> {
-    fn default() -> OnceCell<T> {
-        OnceCell::new()
+    fn default() -> Self {
+        Self::new()
     }
 }
 

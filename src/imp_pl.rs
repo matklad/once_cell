@@ -1,6 +1,7 @@
 extern crate parking_lot;
 
 use std::cell::UnsafeCell;
+use std::hash::{Hash, Hasher};
 use self::parking_lot::{Once, ONCE_INIT, OnceState};
 
 /// A thread-safe cell which can be written to only once.
@@ -35,6 +36,26 @@ pub struct OnceCell<T> {
 impl<T> Default for OnceCell<T> {
     fn default() -> OnceCell<T> {
         OnceCell::new()
+    }
+}
+
+impl<T> From<T> for OnceCell<T> {
+    fn from(value: T) -> Self {
+        let cell = Self::new();
+        cell.get_or_init(|| value);
+        cell
+    }
+}
+
+impl<T: PartialEq> PartialEq for OnceCell<T> {
+    fn eq(&self, other: &OnceCell<T>) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl<T: Hash> Hash for OnceCell<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.get().hash(state);
     }
 }
 
