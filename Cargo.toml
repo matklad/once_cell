@@ -1,6 +1,6 @@
 [package]
 name = "once_cell"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
@@ -15,7 +15,7 @@ categories = [ "rust-patterns", "memory-management" ]
 exclude = ["*.png", "*.svg"]
 
 [dependencies]
-parking_lot = { version = "0.6.3", optional = true, default_features = false }
+parking_lot = { version = "0.7.1", optional = true, default_features = false }
 
 [features]
 default = [ "parking_lot" ]

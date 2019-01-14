@@ -2,7 +2,6 @@ language: rust
 rust:
   - stable
   - beta
-  - 1.26.0
 
 script:
   - cargo test
@@ -10,7 +9,11 @@ script:
 
 matrix:
   include:
-  - rust: beta
+  - rust: stable
     script:
     - cargo test --no-default-features
     - cargo test --no-default-features --release
+  - rust: 1.24.1
+    script:
+    - mv Cargo.lock.min Cargo.lock
+    - cargo build
