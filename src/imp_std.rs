@@ -1,10 +1,6 @@
-use std::{
-    cell::UnsafeCell,
-    sync::{
-        Once, ONCE_INIT,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::cell::UnsafeCell;
+use std::sync::{Once, ONCE_INIT};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A thread-safe cell which can be written to only once.
 ///
@@ -37,8 +33,22 @@ pub struct OnceCell<T> {
 }
 
 impl<T> Default for OnceCell<T> {
-    fn default() -> OnceCell<T> {
-        OnceCell::new()
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> From<T> for OnceCell<T> {
+    fn from(value: T) -> Self {
+        let cell = Self::new();
+        cell.get_or_init(|| value);
+        cell
+    }
+}
+
+impl<T: PartialEq> PartialEq for OnceCell<T> {
+    fn eq(&self, other: &OnceCell<T>) -> bool {
+        self.get() == other.get()
     }
 }
 

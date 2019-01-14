@@ -175,10 +175,8 @@ mod imp;
 
 #[macro_use]
 pub mod unsync {
-    use std::{
-        ops::Deref,
-        cell::UnsafeCell,
-    };
+    use std::ops::Deref;
+    use std::cell::UnsafeCell;
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -205,8 +203,8 @@ pub mod unsync {
     }
 
     impl<T> Default for OnceCell<T> {
-        fn default() -> OnceCell<T> {
-            OnceCell::new()
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -220,6 +218,18 @@ pub mod unsync {
                 }
             }
             res
+        }
+    }
+
+    impl<T: PartialEq> PartialEq for OnceCell<T> {
+        fn eq(&self, other: &Self) -> bool {
+            self.get() == other.get()
+        }
+    }
+
+    impl<T> From<T> for OnceCell<T> {
+        fn from(value: T) -> Self {
+            OnceCell { inner: UnsafeCell::new(Some(value)) }
         }
     }
 

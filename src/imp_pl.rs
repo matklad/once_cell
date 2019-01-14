@@ -38,6 +38,20 @@ impl<T> Default for OnceCell<T> {
     }
 }
 
+impl<T> From<T> for OnceCell<T> {
+    fn from(value: T) -> Self {
+        let cell = Self::new();
+        cell.get_or_init(|| value);
+        cell
+    }
+}
+
+impl<T: PartialEq> PartialEq for OnceCell<T> {
+    fn eq(&self, other: &OnceCell<T>) -> bool {
+        self.get() == other.get()
+    }
+}
+
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
