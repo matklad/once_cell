@@ -16,5 +16,4 @@ matrix:
   - rust: 1.24.1
     script:
     - mv Cargo.lock.min Cargo.lock
-    - cargo test
-    - cargo test --release
+    - cargo build
