@@ -4,6 +4,11 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "cfg-if"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13,8 +18,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "fuchsia-zircon"
@@ -47,7 +55,7 @@ dependencies = [
 name = "once_cell"
 version = "0.1.7"
 dependencies = [
- "crossbeam-utils 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -205,8 +213,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
 "checksum bitflags 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f5cde24d1b2e2216a726368b2363a273739c91f4e3eb4e0dd12d672d396ad989"
+"checksum cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "082bb9b28e00d3c9d39cc03e64ce4cea0f1bb9b3fde493f0cbc008472d22bdf4"
 "checksum cloudabi 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
-"checksum crossbeam-utils 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "677d453a17e8bd2b913fa38e8b9cf04bcdbb5be790aa294f2389661d72036015"
+"checksum crossbeam-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6efda20eef4ccf2a862d442a1e0319d568f9133e16a085a1f8126fe9b6da852d"
 "checksum fuchsia-zircon 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "bd510087c325af53ba24f3be8f1c081b0982319adcb8b03cad764512923ccc19"
 "checksum fuchsia-zircon-sys 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "08b3a6f13ad6b96572b53ce7af74543132f1a7055ccceb6d073dd36c54481859"
 "checksum libc 0.2.27 (registry+https://github.com/rust-lang/crates.io-index)" = "719aa0af4c241fa71d396ffdfe584aa758f08f35b4680ec3f03ecc2c3fe69b76"

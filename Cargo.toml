@@ -21,4 +21,4 @@ parking_lot = { version = "0.7.1", optional = true, default_features = false }
 default = [ "parking_lot" ]
 
 [dev-dependencies]
-crossbeam-utils = "0.5.0"
+crossbeam-utils = "0.6.0"

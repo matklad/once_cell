@@ -214,7 +214,7 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
         let cell: sync::OnceCell<String> = sync::OnceCell::INIT;
         scope(|scope| {
             for _ in 0..n_readers {
-                scope.spawn(|| loop {
+                scope.spawn(|_| loop {
                     if let Some(msg) = cell.get() {
                         assert_eq!(msg, MSG);
                         break;
@@ -222,9 +222,9 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
                 });
             }
             for _ in 0..n_writers {
-                scope.spawn(|| cell.set(MSG.to_owned()));
+                scope.spawn(|_| cell.set(MSG.to_owned()));
             }
-        })
+        }).unwrap()
     }
 }
 
