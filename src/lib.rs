@@ -160,7 +160,7 @@ unifies the APIs of those crates.
 To implement a sync flavor of `OnceCell`, this crates uses either `::std::sync::Once` or
 `::parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
 
-When using `parking_lot`, the crate is compatible with rustc 1.25.0, without `parking_lot` a minimum
+When using `parking_lot`, the crate is compatible with rustc 1.31.0, without `parking_lot` a minimum
 of `1.29.0` is required.
 
 This crate uses unsafe.

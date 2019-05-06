@@ -15,7 +15,7 @@ categories = [ "rust-patterns", "memory-management" ]
 exclude = ["*.png", "*.svg"]
 
 [dependencies]
-parking_lot = { version = "0.7.1", optional = true, default_features = false }
+parking_lot = { version = "0.8", optional = true, default_features = false }
 
 [features]
 default = [ "parking_lot" ]
