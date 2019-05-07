@@ -1,7 +1,7 @@
 extern crate parking_lot;
 
 use std::cell::UnsafeCell;
-use self::parking_lot::{Once, ONCE_INIT, OnceState};
+use self::parking_lot::{Once, OnceState};
 
 /// A thread-safe cell which can be written to only once.
 ///
@@ -55,14 +55,14 @@ impl<T: PartialEq> PartialEq for OnceCell<T> {
 impl<T> OnceCell<T> {
     /// An empty cell, for initialization in a `const` context.
     pub const INIT: OnceCell<T> = OnceCell {
-        once: ONCE_INIT,
+        once: Once::new(),
         value: UnsafeCell::new(None),
     };
 
     /// Creates a new empty cell.
     pub fn new() -> OnceCell<T> {
         OnceCell {
-            once: ONCE_INIT,
+            once: Once::new(),
             value: UnsafeCell::new(None),
         }
     }
