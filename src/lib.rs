@@ -13,7 +13,7 @@ impl OnceCell<T> {
 ```
 
 Note that, like with `RefCell` and `Mutex`, the `set` method requires only a shared reference.
-Because of the single assignment restriction `get` can return an `&T` instead of `ReF<T>`
+Because of the single assignment restriction `get` can return an `&T` instead of `Ref<T>`
 or `MutexGuard<T>`.
 
 # Patterns
@@ -25,20 +25,21 @@ or `MutexGuard<T>`.
 
 ```
 use std::{env, io};
+
 use once_cell::sync::OnceCell;
 
 #[derive(Debug)]
 pub struct Logger {
     // ...
 }
-static INSTANCE: OnceCell<Logger> = OnceCell::INIT;
+static INSTANCE: OnceCell<Logger> = OnceCell::new();
 
 impl Logger {
     pub fn global() -> &'static Logger {
         INSTANCE.get().expect("logger is not initialized")
     }
 
-    fn from_cli(args: env::Args) -> Result<Logger, io::Error> {
+    fn from_cli(args: env::Args) -> Result<Logger, std::io::Error> {
        // ...
 #      Ok(Logger {})
     }
@@ -57,10 +58,11 @@ This is essentially `lazy_static!` macro, but without a macro.
 
 ```
 use std::{sync::Mutex, collections::HashMap};
+
 use once_cell::sync::OnceCell;
 
 fn global_data() -> &'static Mutex<HashMap<i32, String>> {
-    static INSTANCE: OnceCell<Mutex<HashMap<i32, String>>> = OnceCell::INIT;
+    static INSTANCE: OnceCell<Mutex<HashMap<i32, String>>> = OnceCell::new();
     INSTANCE.get_or_init(|| {
         let mut m = HashMap::new();
         m.insert(13, "Spica".to_string());
@@ -70,22 +72,18 @@ fn global_data() -> &'static Mutex<HashMap<i32, String>> {
 }
 ```
 
-There are also `sync::Lazy` and `unsync::Lazy` convenience types and macros
-to streamline this pattern:
+There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline this pattern:
 
 ```
-#[macro_use]
-extern crate once_cell;
-
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
-static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = sync_lazy! {
+static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(13, "Spica".to_string());
     m.insert(74, "Hoyten".to_string());
     Mutex::new(m)
-};
+});
 
 fn main() {
     println!("{:?}", GLOBAL_DATA.lock().unwrap());
@@ -112,7 +110,8 @@ If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
 ```
-use std::{fs, io::{self, Read}, path::PathBuf};
+use std::{fs, path::PathBuf};
+
 use once_cell::unsync::OnceCell;
 
 struct Ctx {
@@ -121,12 +120,9 @@ struct Ctx {
 }
 
 impl Ctx {
-    pub fn get_config(&self) -> Result<&str, io::Error> {
-        let cfg = self.config.get_or_try_init(|| -> Result<String, io::Error> {
-            let mut buf = String::new();
-            fs::File::open(&self.config_path)?
-                .read_to_string(&mut buf)?;
-            Ok(buf)
+    pub fn get_config(&self) -> Result<&str, std::io::Error> {
+        let cfg = self.config.get_or_try_init(|| {
+            fs::read_to_string(&self.config_path)
         })?;
         Ok(cfg.as_str())
     }
@@ -157,13 +153,21 @@ Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/
 [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and in some sense just streamlines and
 unifies the APIs of those crates.
 
-To implement a sync flavor of `OnceCell`, this crates uses either `::std::sync::Once` or
-`::parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
+To implement a sync flavor of `OnceCell`, this crates uses either `std::sync::Once` or
+`parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
 
-When using `parking_lot`, the crate is compatible with rustc 1.31.0, without `parking_lot` a minimum
-of `1.29.0` is required.
+This crate requires rust 1.31.1.
 
 This crate uses unsafe.
+
+# Related crates
+
+* [double-checked-cell](https://github.com/niklasf/double-checked-cell)
+* [lazy-init](https://crates.io/crates/lazy-init)
+* [lazycell](https://crates.io/crates/lazycell)
+* [mitochondria](https://crates.io/crates/mitochondria)
+* [lazy_static](https://crates.io/crates/lazy_static)
+
 */
 
 #[cfg(feature = "parking_lot")]
@@ -175,8 +179,10 @@ mod imp;
 
 #[macro_use]
 pub mod unsync {
-    use std::ops::Deref;
-    use std::cell::UnsafeCell;
+    use std::{
+        ops::Deref,
+        cell::UnsafeCell
+    };
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -234,11 +240,8 @@ pub mod unsync {
     }
 
     impl<T> OnceCell<T> {
-        /// An empty cell, for initialization in a `const` context.
-        pub const INIT: OnceCell<T> = OnceCell { inner: UnsafeCell::new(None) };
-
         /// Creates a new empty cell.
-        pub fn new() -> OnceCell<T> {
+        pub const fn new() -> OnceCell<T> {
             OnceCell { inner: UnsafeCell::new(None) }
         }
 
@@ -347,23 +350,36 @@ pub mod unsync {
     /// //   92
     /// ```
     #[derive(Debug)]
-    pub struct Lazy<T, F: Fn() -> T = fn() -> T> {
-        #[doc(hidden)]
-        pub __cell: OnceCell<T>,
-        #[doc(hidden)]
-        pub __init: F,
+    pub struct Lazy<T, F = fn() -> T> {
+        cell: OnceCell<T>,
+        init: F,
+    }
+
+    impl<T, F> Lazy<T, F> {
+        /// Creates a new lazy value with the given initializing function.
+        ///
+        /// # Example
+        /// ```
+        /// # #[macro_use] extern crate once_cell;
+        /// # fn main() {
+        /// use once_cell::unsync::Lazy;
+        ///
+        /// let hello = "Hello, World!".to_string();
+        ///
+        /// let lazy = Lazy::new(|| hello.to_uppercase());
+        ///
+        /// assert_eq!(&*lazy, "HELLO, WORLD!");
+        /// # }
+        /// ```
+        pub const fn new(init: F) -> Lazy<T, F> {
+            Lazy {
+                cell: OnceCell::new(),
+                init,
+            }
+        }
     }
 
     impl<T, F: Fn() -> T> Lazy<T, F> {
-        /// Creates a new lazy value with the given initializing
-        /// function.
-        pub fn new(init: F) -> Lazy<T, F> {
-            Lazy {
-                __cell: OnceCell::INIT,
-                __init: init,
-            }
-        }
-
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -378,7 +394,7 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.__cell.get_or_init(|| (this.__init)())
+            this.cell.get_or_init(|| (this.init)())
         }
     }
 
@@ -388,42 +404,118 @@ pub mod unsync {
             Lazy::force(self)
         }
     }
-
-    /// Creates a new lazy value initialized by the given closure block.
-    /// This macro works in const contexts.
-    /// If you need a `move` closure, use `Lazy::new` constructor function.
-    ///
-    /// # Example
-    /// ```
-    /// # #[macro_use] extern crate once_cell;
-    /// # fn main() {
-    /// let hello = "Hello, World!".to_string();
-    ///
-    /// let lazy = unsync_lazy! {
-    ///     hello.to_uppercase()
-    /// };
-    ///
-    /// assert_eq!(&*lazy, "HELLO, WORLD!");
-    /// # }
-    /// ```
-    #[macro_export]
-    macro_rules! unsync_lazy {
-        ($($block:tt)*) => {
-            $crate::unsync::Lazy {
-                __cell: $crate::unsync::OnceCell::INIT,
-                __init: || { $($block)* },
-            }
-        };
-    }
 }
 
 #[macro_use]
 pub mod sync {
-    // Can't use `OnceCell(imp::OnceCell) due to
-    // https://github.com/rust-lang/rust/issues/50518
-    pub use imp::OnceCell;
+    use crate::imp::OnceCell as Imp;
+
+    /// A thread-safe cell which can be written to only once.
+    ///
+    /// Unlike `::std::sync::Mutex`, a `OnceCell` provides simple `&`
+    /// references to the contents.
+    ///
+    /// # Example
+    /// ```
+    /// use once_cell::sync::OnceCell;
+    ///
+    /// static CELL: OnceCell<String> = OnceCell::new();
+    /// assert!(CELL.get().is_none());
+    ///
+    /// std::thread::spawn(|| {
+    ///     let value: &String = CELL.get_or_init(|| {
+    ///         "Hello, World!".to_string()
+    ///     });
+    ///     assert_eq!(value, "Hello, World!");
+    /// }).join().unwrap();
+    ///
+    /// let value: Option<&String> = CELL.get();
+    /// assert!(value.is_some());
+    /// assert_eq!(value.unwrap().as_str(), "Hello, World!");
+    /// ```
+    #[derive(Debug)]
+    pub struct OnceCell<T>(Imp<T>);
+
+    impl<T> Default for OnceCell<T> {
+        fn default() -> OnceCell<T> {
+            OnceCell::new()
+        }
+    }
+
+    impl<T> From<T> for OnceCell<T> {
+        fn from(value: T) -> Self {
+            let cell = Self::new();
+            cell.get_or_init(|| value);
+            cell
+        }
+    }
+
+    impl<T: PartialEq> PartialEq for OnceCell<T> {
+        fn eq(&self, other: &OnceCell<T>) -> bool {
+            self.get() == other.get()
+        }
+    }
+
+    impl<T> OnceCell<T> {
+        /// Creates a new empty cell.
+        pub const fn new() -> OnceCell<T> {
+            OnceCell(Imp::new())
+        }
+
+        /// Gets the reference to the underlying value. Returns `None`
+        /// if the cell is empty.
+        pub fn get(&self) -> Option<&T> {
+            self.0.get()
+        }
+
+        /// Sets the contents of this cell to `value`. Returns
+        /// `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// full.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// static CELL: OnceCell<i32> = OnceCell::new();
+        ///
+        /// fn main() {
+        ///     assert!(CELL.get().is_none());
+        ///
+        ///     std::thread::spawn(|| {
+        ///         assert_eq!(CELL.set(92), Ok(()));
+        ///     }).join().unwrap();
+        ///
+        ///     assert_eq!(CELL.set(62), Err(62));
+        ///     assert_eq!(CELL.get(), Some(&92));
+        /// }
+        /// ```
+        pub fn set(&self, value: T) -> Result<(), T> {
+            self.0.set(value)
+        }
+
+        /// Gets the contents of the cell, initializing it with `f`
+        /// if the cell was empty. May threads may call `get_or_init`
+        /// concurrently with different initializing functions, but
+        /// it is guaranteed that only one function will be executed.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// let value = cell.get_or_init(|| 92);
+        /// assert_eq!(value, &92);
+        /// let value = cell.get_or_init(|| unreachable!());
+        /// assert_eq!(value, &92);
+        /// ```
+        pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
+            self.0.get_or_init(f)
+        }
+    }
 
     /// A value which is initialized on the first access.
+    ///
+    /// This type is thread-safe and can be used in statics:
     ///
     /// # Example
     /// ```
@@ -433,17 +525,17 @@ pub mod sync {
     /// use std::collections::HashMap;
     /// use once_cell::sync::Lazy;
     ///
-    /// static HASHMAP: Lazy<HashMap<i32, String>> = sync_lazy! {
+    /// static HASHMAP: Lazy<HashMap<i32, String>> = Lazy::new(|| {
     ///     println!("initializing");
     ///     let mut m = HashMap::new();
     ///     m.insert(13, "Spica".to_string());
     ///     m.insert(74, "Hoyten".to_string());
     ///     m
-    /// };
+    /// });
     ///
     /// fn main() {
     ///     println!("ready");
-    ///     ::std::thread::spawn(|| {
+    ///     std::thread::spawn(|| {
     ///         println!("{:?}", HASHMAP.get(&13));
     ///     }).join().unwrap();
     ///     println!("{:?}", HASHMAP.get(&74));
@@ -456,23 +548,23 @@ pub mod sync {
     /// }
     /// ```
     #[derive(Debug)]
-    pub struct Lazy<T, F: Fn() -> T = fn() -> T> {
-        #[doc(hidden)]
-        pub __cell: OnceCell<T>,
-        #[doc(hidden)]
-        pub __init: F,
+    pub struct Lazy<T, F = fn() -> T> {
+        cell: OnceCell<T>,
+        init: F,
+    }
+
+    impl<T, F> Lazy<T, F> {
+        /// Creates a new lazy value with the given initializing
+        /// function.
+        pub const fn new(f: F) -> Lazy<T, F> {
+            Lazy {
+                cell: OnceCell::new(),
+                init: f,
+            }
+        }
     }
 
     impl<T, F: Fn() -> T> Lazy<T, F> {
-        /// Creates a new lazy value with the given initializing
-        /// function.
-        pub fn new(f: F) -> Lazy<T, F> {
-            Lazy {
-                __cell: OnceCell::new(),
-                __init: f,
-            }
-        }
-
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -487,7 +579,7 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.__cell.get_or_init(|| (this.__init)())
+            this.cell.get_or_init(|| (this.init)())
         }
     }
 
@@ -496,32 +588,5 @@ pub mod sync {
         fn deref(&self) -> &T {
             Lazy::force(self)
         }
-    }
-
-    /// Creates a new lazy value initialized by the given closure block.
-    /// This macro works in const contexts.
-    /// If you need a `move` closure, use `Lazy::new` constructor function.
-    ///
-    /// # Example
-    /// ```
-    /// # #[macro_use] extern crate once_cell;
-    /// # fn main() {
-    /// let hello = "Hello, World!".to_string();
-    ///
-    /// let lazy = sync_lazy! {
-    ///     hello.to_uppercase()
-    /// };
-    ///
-    /// assert_eq!(&*lazy, "HELLO, WORLD!");
-    /// # }
-    /// ```
-    #[macro_export]
-    macro_rules! sync_lazy {
-        ($($block:tt)*) => {
-            $crate::sync::Lazy {
-                __cell: $crate::sync::OnceCell::INIT,
-                __init: || { $($block)* },
-            }
-        };
     }
 }

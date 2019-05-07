@@ -11,7 +11,7 @@
 might store arbitrary non-`Copy` types, can be assigned to at most once and provide direct access
 to the stored contents. In a nutshell, API looks *roughly* like this:
 
-```rust,no-run
+```no-run
 impl OnceCell<T> {
     fn set(&self, value: T) -> Result<(), T> { ... }
     fn get(&self) -> Option<&T> { ... }
@@ -19,7 +19,7 @@ impl OnceCell<T> {
 ```
 
 Note that, like with `RefCell` and `Mutex`, the `set` method requires only a shared reference.
-Because of the single assignment restriction `get` can return an `&T` instead of `ReF<T>`
+Because of the single assignment restriction `get` can return an `&T` instead of `Ref<T>`
 or `MutexGuard<T>`.
 
 # Patterns
@@ -29,31 +29,32 @@ or `MutexGuard<T>`.
 ## Safe Initialization of global data
 
 
-```rust
+```
 use std::{env, io};
+
 use once_cell::sync::OnceCell;
 
 #[derive(Debug)]
 pub struct Logger {
     // ...
 }
-static INSTANCE: OnceCell<Logger> = OnceCell::INIT;
+static INSTANCE: OnceCell<Logger> = OnceCell::new();
 
 impl Logger {
     pub fn global() -> &'static Logger {
         INSTANCE.get().expect("logger is not initialized")
     }
 
-    fn from_cli(args: env::Args) -> Result<Logger, io::Error> {
+    fn from_cli(args: env::Args) -> Result<Logger, std::io::Error> {
        // ...
+#      Ok(Logger {})
     }
 }
 
-fn main() -> Result<(), io::Error> {
-    let logger = Logger::from_cli(env::args())?;
+fn main() {
+    let logger = Logger::from_cli(env::args()).unwrap();
     INSTANCE.set(logger).unwrap();
     // use `Logger::global()` from now on
-    Ok(())
 }
 ```
 
@@ -61,12 +62,13 @@ fn main() -> Result<(), io::Error> {
 
 This is essentially `lazy_static!` macro, but without a macro.
 
-```rust
+```
 use std::{sync::Mutex, collections::HashMap};
+
 use once_cell::sync::OnceCell;
 
 fn global_data() -> &'static Mutex<HashMap<i32, String>> {
-    static INSTANCE: OnceCell<Mutex<HashMap<i32, String>>> = OnceCell::INIT;
+    static INSTANCE: OnceCell<Mutex<HashMap<i32, String>>> = OnceCell::new();
     INSTANCE.get_or_init(|| {
         let mut m = HashMap::new();
         m.insert(13, "Spica".to_string());
@@ -76,22 +78,18 @@ fn global_data() -> &'static Mutex<HashMap<i32, String>> {
 }
 ```
 
-There are also `sync::Lazy` and `unsync::Lazy` convenience types and macros
-to streamline this pattern:
+There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline this pattern:
 
-```rust
-#[macro_use]
-extern crate once_cell;
-
+```
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
-static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = sync_lazy! {
+static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(13, "Spica".to_string());
     m.insert(74, "Hoyten".to_string());
     Mutex::new(m)
-};
+});
 
 fn main() {
     println!("{:?}", GLOBAL_DATA.lock().unwrap());
@@ -102,7 +100,7 @@ fn main() {
 
 Unlike `lazy_static!`, `Lazy` works with local variables.
 
-```rust
+```
 use once_cell::unsync::Lazy;
 
 fn main() {
@@ -117,8 +115,9 @@ fn main() {
 If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
-```rust
-use std::{fs, io, path::PathBuf};
+```
+use std::{fs, path::PathBuf};
+
 use once_cell::unsync::OnceCell;
 
 struct Ctx {
@@ -127,7 +126,7 @@ struct Ctx {
 }
 
 impl Ctx {
-    pub fn get_config(&self) -> Result<&str, io::Error> {
+    pub fn get_config(&self) -> Result<&str, std::io::Error> {
         let cfg = self.config.get_or_try_init(|| {
             fs::read_to_string(&self.config_path)
         })?;
@@ -160,10 +159,17 @@ Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/
 [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and in some sense just streamlines and
 unifies the APIs of those crates.
 
-To implement a sync flavor of `OnceCell`, this crates uses either `::std::sync::Once` or
-`::parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
+To implement a sync flavor of `OnceCell`, this crates uses either `std::sync::Once` or
+`parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
 
-When using `parking_lot`, the crate is compatible with rustc 1.31.0, without `parking_lot` a minimum
-of `1.29.0` is required.
+This crate requires rust 1.31.1.
 
 This crate uses unsafe.
+
+# Related crates
+
+* [double-checked-cell](https://github.com/niklasf/double-checked-cell)
+* [lazy-init](https://crates.io/crates/lazy-init)
+* [lazycell](https://crates.io/crates/lazycell)
+* [mitochondria](https://crates.io/crates/mitochondria)
+* [lazy_static](https://crates.io/crates/lazy_static)
