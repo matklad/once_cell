@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "crossbeam-utils 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
