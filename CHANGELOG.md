@@ -3,6 +3,8 @@
 ## 0.2.0
 
 - MSRV is now 1.31.1
+- `Lazy::new` and `OnceCell::new` are now const-fns
+- `unsync_lazy` and `sync_lazy` macros are removed
 
 ## 0.1.8
 

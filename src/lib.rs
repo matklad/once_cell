@@ -13,7 +13,7 @@ impl OnceCell<T> {
 ```
 
 Note that, like with `RefCell` and `Mutex`, the `set` method requires only a shared reference.
-Because of the single assignment restriction `get` can return an `&T` instead of `ReF<T>`
+Because of the single assignment restriction `get` can return an `&T` instead of `Ref<T>`
 or `MutexGuard<T>`.
 
 # Patterns
@@ -25,6 +25,7 @@ or `MutexGuard<T>`.
 
 ```
 use std::{env, io};
+
 use once_cell::sync::OnceCell;
 
 #[derive(Debug)]
@@ -38,7 +39,7 @@ impl Logger {
         INSTANCE.get().expect("logger is not initialized")
     }
 
-    fn from_cli(args: env::Args) -> Result<Logger, io::Error> {
+    fn from_cli(args: env::Args) -> Result<Logger, std::io::Error> {
        // ...
 #      Ok(Logger {})
     }
@@ -57,6 +58,7 @@ This is essentially `lazy_static!` macro, but without a macro.
 
 ```
 use std::{sync::Mutex, collections::HashMap};
+
 use once_cell::sync::OnceCell;
 
 fn global_data() -> &'static Mutex<HashMap<i32, String>> {
@@ -70,13 +72,9 @@ fn global_data() -> &'static Mutex<HashMap<i32, String>> {
 }
 ```
 
-There are also `sync::Lazy` and `unsync::Lazy` convenience types and macros
-to streamline this pattern:
+There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline this pattern:
 
 ```
-#[macro_use]
-extern crate once_cell;
-
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
@@ -112,7 +110,8 @@ If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
 ```
-use std::{fs, io::{self, Read}, path::PathBuf};
+use std::{fs, path::PathBuf};
+
 use once_cell::unsync::OnceCell;
 
 struct Ctx {
@@ -121,12 +120,9 @@ struct Ctx {
 }
 
 impl Ctx {
-    pub fn get_config(&self) -> Result<&str, io::Error> {
-        let cfg = self.config.get_or_try_init(|| -> Result<String, io::Error> {
-            let mut buf = String::new();
-            fs::File::open(&self.config_path)?
-                .read_to_string(&mut buf)?;
-            Ok(buf)
+    pub fn get_config(&self) -> Result<&str, std::io::Error> {
+        let cfg = self.config.get_or_try_init(|| {
+            fs::read_to_string(&self.config_path)
         })?;
         Ok(cfg.as_str())
     }
@@ -157,13 +153,21 @@ Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/
 [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and in some sense just streamlines and
 unifies the APIs of those crates.
 
-To implement a sync flavor of `OnceCell`, this crates uses either `::std::sync::Once` or
-`::parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
+To implement a sync flavor of `OnceCell`, this crates uses either `std::sync::Once` or
+`parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
 
-When using `parking_lot`, the crate is compatible with rustc 1.31.0, without `parking_lot` a minimum
-of `1.29.0` is required.
+This crate requires rust 1.31.1.
 
 This crate uses unsafe.
+
+# Related crates
+
+* [double-checked-cell](https://github.com/niklasf/double-checked-cell)
+* [lazy-init](https://crates.io/crates/lazy-init)
+* [lazycell](https://crates.io/crates/lazycell)
+* [mitochondria](https://crates.io/crates/mitochondria)
+* [lazy_static](https://crates.io/crates/lazy_static)
+
 */
 
 #[cfg(feature = "parking_lot")]
@@ -418,7 +422,7 @@ pub mod sync {
     /// static CELL: OnceCell<String> = OnceCell::new();
     /// assert!(CELL.get().is_none());
     ///
-    /// ::std::thread::spawn(|| {
+    /// std::thread::spawn(|| {
     ///     let value: &String = CELL.get_or_init(|| {
     ///         "Hello, World!".to_string()
     ///     });
@@ -477,7 +481,7 @@ pub mod sync {
         /// fn main() {
         ///     assert!(CELL.get().is_none());
         ///
-        ///     ::std::thread::spawn(|| {
+        ///     std::thread::spawn(|| {
         ///         assert_eq!(CELL.set(92), Ok(()));
         ///     }).join().unwrap();
         ///
@@ -531,7 +535,7 @@ pub mod sync {
     ///
     /// fn main() {
     ///     println!("ready");
-    ///     ::std::thread::spawn(|| {
+    ///     std::thread::spawn(|| {
     ///         println!("{:?}", HASHMAP.get(&13));
     ///     }).join().unwrap();
     ///     println!("{:?}", HASHMAP.get(&74));
