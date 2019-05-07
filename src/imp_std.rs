@@ -1,6 +1,7 @@
-use std::cell::UnsafeCell;
-use std::sync::Once;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    cell::UnsafeCell,
+    sync::{Once, atomic::{AtomicBool, Ordering}},
+};
 
 #[derive(Debug)]
 pub(crate) struct OnceCell<T> {

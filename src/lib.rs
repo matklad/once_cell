@@ -175,8 +175,10 @@ mod imp;
 
 #[macro_use]
 pub mod unsync {
-    use std::ops::Deref;
-    use std::cell::UnsafeCell;
+    use std::{
+        ops::Deref,
+        cell::UnsafeCell
+    };
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -402,7 +404,7 @@ pub mod unsync {
 
 #[macro_use]
 pub mod sync {
-    use imp::OnceCell as Imp;
+    use crate::imp::OnceCell as Imp;
 
     /// A thread-safe cell which can be written to only once.
     ///

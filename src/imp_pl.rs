@@ -1,7 +1,6 @@
-extern crate parking_lot;
-
 use std::cell::UnsafeCell;
-use self::parking_lot::{Once, OnceState};
+
+use parking_lot::{Once, OnceState};
 
 #[derive(Debug)]
 pub(crate) struct OnceCell<T> {
