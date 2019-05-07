@@ -234,11 +234,8 @@ pub mod unsync {
     }
 
     impl<T> OnceCell<T> {
-        /// An empty cell, for initialization in a `const` context.
-        pub const INIT: OnceCell<T> = OnceCell { inner: UnsafeCell::new(None) };
-
         /// Creates a new empty cell.
-        pub fn new() -> OnceCell<T> {
+        pub const fn new() -> OnceCell<T> {
             OnceCell { inner: UnsafeCell::new(None) }
         }
 
@@ -347,23 +344,36 @@ pub mod unsync {
     /// //   92
     /// ```
     #[derive(Debug)]
-    pub struct Lazy<T, F: Fn() -> T = fn() -> T> {
-        #[doc(hidden)]
-        pub __cell: OnceCell<T>,
-        #[doc(hidden)]
-        pub __init: F,
+    pub struct Lazy<T, F = fn() -> T> {
+        cell: OnceCell<T>,
+        init: F,
+    }
+
+    impl<T, F> Lazy<T, F> {
+        /// Creates a new lazy value with the given initializing function.
+        ///
+        /// # Example
+        /// ```
+        /// # #[macro_use] extern crate once_cell;
+        /// # fn main() {
+        /// use once_cell::unsync::Lazy;
+        ///
+        /// let hello = "Hello, World!".to_string();
+        ///
+        /// let lazy = Lazy::new(|| hello.to_uppercase());
+        ///
+        /// assert_eq!(&*lazy, "HELLO, WORLD!");
+        /// # }
+        /// ```
+        pub const fn new(init: F) -> Lazy<T, F> {
+            Lazy {
+                cell: OnceCell::new(),
+                init,
+            }
+        }
     }
 
     impl<T, F: Fn() -> T> Lazy<T, F> {
-        /// Creates a new lazy value with the given initializing
-        /// function.
-        pub fn new(init: F) -> Lazy<T, F> {
-            Lazy {
-                __cell: OnceCell::INIT,
-                __init: init,
-            }
-        }
-
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -378,7 +388,7 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.__cell.get_or_init(|| (this.__init)())
+            this.cell.get_or_init(|| (this.init)())
         }
     }
 
@@ -387,33 +397,6 @@ pub mod unsync {
         fn deref(&self) -> &T {
             Lazy::force(self)
         }
-    }
-
-    /// Creates a new lazy value initialized by the given closure block.
-    /// This macro works in const contexts.
-    /// If you need a `move` closure, use `Lazy::new` constructor function.
-    ///
-    /// # Example
-    /// ```
-    /// # #[macro_use] extern crate once_cell;
-    /// # fn main() {
-    /// let hello = "Hello, World!".to_string();
-    ///
-    /// let lazy = unsync_lazy! {
-    ///     hello.to_uppercase()
-    /// };
-    ///
-    /// assert_eq!(&*lazy, "HELLO, WORLD!");
-    /// # }
-    /// ```
-    #[macro_export]
-    macro_rules! unsync_lazy {
-        ($($block:tt)*) => {
-            $crate::unsync::Lazy {
-                __cell: $crate::unsync::OnceCell::INIT,
-                __init: || { $($block)* },
-            }
-        };
     }
 }
 

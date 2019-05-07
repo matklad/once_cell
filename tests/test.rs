@@ -100,12 +100,12 @@ fn sync_once_cell_drop_empty() {
 }
 
 #[test]
-fn unsync_lazy_macro() {
+fn unsync_lazy_new() {
     let called = Cell::new(0);
-    let x = unsync_lazy! {
+    let x = unsync::Lazy::new(|| {
         called.set(called.get() + 1);
         92
-    };
+    });
 
     assert_eq!(called.get(), 0);
 
