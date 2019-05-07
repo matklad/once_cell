@@ -1,5 +1,5 @@
 use std::cell::UnsafeCell;
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug)]
@@ -10,13 +10,7 @@ pub(crate) struct OnceCell<T> {
 }
 
 impl<T> OnceCell<T> {
-    pub(crate) const INIT: OnceCell<T> = OnceCell {
-        once: ONCE_INIT,
-        value: UnsafeCell::new(None),
-        is_initialized: AtomicBool::new(false),
-    };
-
-    pub(crate) fn new() -> OnceCell<T> {
+    pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
             once: Once::new(),
             value: UnsafeCell::new(None),

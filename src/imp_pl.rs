@@ -11,12 +11,7 @@ pub(crate) struct OnceCell<T> {
 
 
 impl<T> OnceCell<T> {
-    pub(crate) const INIT: OnceCell<T> = OnceCell {
-        once: Once::new(),
-        value: UnsafeCell::new(None),
-    };
-
-    pub(crate) fn new() -> OnceCell<T> {
+    pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
             once: Once::new(),
             value: UnsafeCell::new(None),

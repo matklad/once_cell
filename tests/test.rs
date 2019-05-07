@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate once_cell;
 extern crate crossbeam_utils;
 
@@ -119,12 +118,12 @@ fn unsync_lazy_new() {
 }
 
 #[test]
-fn sync_lazy_macro() {
+fn sync_lazy_new() {
     let called = AtomicUsize::new(0);
-    let x = sync_lazy! {
+    let x = sync::Lazy::new(|| {
         called.fetch_add(1, SeqCst);
         92
-    };
+    });
 
     assert_eq!(called.load(SeqCst), 0);
 
@@ -142,13 +141,13 @@ fn sync_lazy_macro() {
 
 #[test]
 fn static_lazy() {
-    static XS: sync::Lazy<Vec<i32>> = sync_lazy! {
+    static XS: sync::Lazy<Vec<i32>> = sync::Lazy::new(|| {
         let mut xs = Vec::new();
         xs.push(1);
         xs.push(2);
         xs.push(3);
         xs
-    };
+    });
     go(|| {
         assert_eq!(&*XS, &vec![1, 2, 3]);
     });
@@ -158,7 +157,7 @@ fn static_lazy() {
 #[test]
 fn static_lazy_no_macros() {
     fn xs() -> &'static Vec<i32> {
-        static XS: sync::OnceCell<Vec<i32>> = sync::OnceCell::INIT;
+        static XS: sync::OnceCell<Vec<i32>> = sync::OnceCell::new();
         XS.get_or_init(|| {
             let mut xs = Vec::new();
             xs.push(1);
@@ -182,7 +181,7 @@ fn eval_once_macro() {
         (|| -> $ty:ty {
             $($body:tt)*
         }) => {{
-            static ONCE_CELL: sync::OnceCell<$ty> = sync::OnceCell::INIT;
+            static ONCE_CELL: sync::OnceCell<$ty> = sync::OnceCell::new();
             fn init() -> $ty {
                 $($body)*
             }
@@ -211,7 +210,7 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
     const MSG: &str = "Hello, World";
 
     for _ in 0..n_tries {
-        let cell: sync::OnceCell<String> = sync::OnceCell::INIT;
+        let cell: sync::OnceCell<String> = sync::OnceCell::new();
         scope(|scope| {
             for _ in 0..n_readers {
                 scope.spawn(|_| loop {

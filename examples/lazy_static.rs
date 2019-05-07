@@ -1,20 +1,19 @@
-#[macro_use]
 extern crate once_cell;
 
 use std::collections::HashMap;
 use once_cell::sync::{Lazy, OnceCell};
 
-static HASHMAP: Lazy<HashMap<u32, &'static str>> = sync_lazy! {
+static HASHMAP: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(0, "foo");
     m.insert(1, "bar");
     m.insert(2, "baz");
     m
-};
+});
 
 // Same, but completely without macros
 fn hashmap() -> &'static HashMap<u32, &'static str> {
-    static INSTANCE: OnceCell<HashMap<u32, &'static str>> = OnceCell::INIT;
+    static INSTANCE: OnceCell<HashMap<u32, &'static str>> = OnceCell::new();
     INSTANCE.get_or_init(|| {
         let mut m = HashMap::new();
         m.insert(0, "foo");
