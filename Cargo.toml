@@ -12,7 +12,7 @@ repository = "https://github.com/matklad/once_cell"
 keywords = ["lazy", "static"]
 categories = [ "rust-patterns", "memory-management" ]
 
-exclude = ["*.png", "*.svg"]
+exclude = ["*.png", "*.svg", "/Cargo.lock.min", "/.travis.yml"]
 
 [dependencies]
 parking_lot = { version = "0.7.1", optional = true, default_features = false }
