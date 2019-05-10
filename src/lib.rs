@@ -177,7 +177,6 @@ mod imp;
 #[path="imp_std.rs"]
 mod imp;
 
-#[macro_use]
 pub mod unsync {
     use std::{
         ops::Deref,
@@ -360,7 +359,7 @@ pub mod unsync {
         ///
         /// # Example
         /// ```
-        /// # #[macro_use] extern crate once_cell;
+        /// # extern crate once_cell;
         /// # fn main() {
         /// use once_cell::unsync::Lazy;
         ///
@@ -406,7 +405,6 @@ pub mod unsync {
     }
 }
 
-#[macro_use]
 pub mod sync {
     use crate::imp::OnceCell as Imp;
 
@@ -519,7 +517,6 @@ pub mod sync {
     ///
     /// # Example
     /// ```
-    /// #[macro_use]
     /// extern crate once_cell;
     ///
     /// use std::collections::HashMap;
