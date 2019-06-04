@@ -11,7 +11,7 @@
 might store arbitrary non-`Copy` types, can be assigned to at most once and provide direct access
 to the stored contents. In a nutshell, API looks *roughly* like this:
 
-```no-run
+```rust,no-run
 impl OnceCell<T> {
     fn set(&self, value: T) -> Result<(), T> { ... }
     fn get(&self) -> Option<&T> { ... }
@@ -29,7 +29,7 @@ or `MutexGuard<T>`.
 ## Safe Initialization of global data
 
 
-```
+```rust
 use std::{env, io};
 
 use once_cell::sync::OnceCell;
@@ -62,7 +62,7 @@ fn main() {
 
 This is essentially `lazy_static!` macro, but without a macro.
 
-```
+```rust
 use std::{sync::Mutex, collections::HashMap};
 
 use once_cell::sync::OnceCell;
@@ -80,7 +80,7 @@ fn global_data() -> &'static Mutex<HashMap<i32, String>> {
 
 There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline this pattern:
 
-```
+```rust
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
@@ -100,7 +100,7 @@ fn main() {
 
 Unlike `lazy_static!`, `Lazy` works with local variables.
 
-```
+```rust
 use once_cell::unsync::Lazy;
 
 fn main() {
@@ -115,7 +115,7 @@ fn main() {
 If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
-```
+```rust
 use std::{fs, path::PathBuf};
 
 use once_cell::unsync::OnceCell;
