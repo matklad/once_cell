@@ -1,3 +1,10 @@
+branches:
+  only:
+    - staging
+    - master
+    - trying
+
+
 language: rust
 rust:
   - stable
