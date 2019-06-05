@@ -171,17 +171,14 @@ This crate uses unsafe.
 */
 
 #[cfg(feature = "parking_lot")]
-#[path="imp_pl.rs"]
+#[path = "imp_pl.rs"]
 mod imp;
 #[cfg(not(feature = "parking_lot"))]
-#[path="imp_std.rs"]
+#[path = "imp_std.rs"]
 mod imp;
 
 pub mod unsync {
-    use std::{
-        ops::Deref,
-        cell::UnsafeCell
-    };
+    use std::{ops::Deref, cell::UnsafeCell};
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -371,10 +368,7 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy {
-                cell: OnceCell::new(),
-                init,
-            }
+            Lazy { cell: OnceCell::new(), init }
         }
     }
 
@@ -554,10 +548,7 @@ pub mod sync {
         /// Creates a new lazy value with the given initializing
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
-            Lazy {
-                cell: OnceCell::new(),
-                init: f,
-            }
+            Lazy { cell: OnceCell::new(), init: f }
         }
     }
 

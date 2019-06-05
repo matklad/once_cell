@@ -41,14 +41,16 @@ impl<T> OnceCell<T> {
         });
         match value {
             None => Ok(()),
-            Some(value) => Err(value)
+            Some(value) => Err(value),
         }
     }
 
     pub(crate) fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
         self.once.call_once(|| {
             let value = f();
-            unsafe { self.set_inner(value); }
+            unsafe {
+                self.set_inner(value);
+            }
         });
         self.get().unwrap()
     }

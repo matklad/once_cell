@@ -1,8 +1,3 @@
-extern crate once_cell;
-extern crate crossbeam_utils;
-
-use crossbeam_utils::thread::scope;
-
 use std::{
     mem,
     thread,
@@ -10,6 +5,9 @@ use std::{
     cell::Cell,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
+
+use crossbeam_utils::thread::scope;
+
 use once_cell::{sync, unsync};
 
 fn go<F: FnOnce() -> ()>(mut f: F) {
@@ -22,7 +20,9 @@ fn go<F: FnOnce() -> ()>(mut f: F) {
     thread::spawn(move || {
         let f: F = unsafe { ptr::read(yolo.0 as *const F) };
         f();
-    }).join().unwrap();
+    })
+    .join()
+    .unwrap();
 }
 
 #[test]
@@ -32,9 +32,7 @@ fn unsync_once_cell() {
     c.get_or_init(|| 92);
     assert_eq!(c.get(), Some(&92));
 
-    c.get_or_init(|| {
-        panic!("Kabom!")
-    });
+    c.get_or_init(|| panic!("Kabom!"));
     assert_eq!(c.get(), Some(&92));
 }
 
@@ -138,7 +136,6 @@ fn sync_lazy_new() {
     assert_eq!(called.load(SeqCst), 1);
 }
 
-
 #[test]
 fn static_lazy() {
     static XS: sync::Lazy<Vec<i32>> = sync::Lazy::new(|| {
@@ -223,7 +220,8 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
             for _ in 0..n_writers {
                 scope.spawn(|_| cell.set(MSG.to_owned()));
             }
-        }).unwrap()
+        })
+        .unwrap()
     }
 }
 

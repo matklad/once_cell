@@ -8,13 +8,9 @@ pub(crate) struct OnceCell<T> {
     value: UnsafeCell<Option<T>>,
 }
 
-
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
-        OnceCell {
-            once: Once::new(),
-            value: UnsafeCell::new(None),
-        }
+        OnceCell { once: Once::new(), value: UnsafeCell::new(None) }
     }
 
     pub(crate) fn get(&self) -> Option<&T> {
@@ -34,7 +30,7 @@ impl<T> OnceCell<T> {
         });
         match value {
             None => Ok(()),
-            Some(value) => Err(value)
+            Some(value) => Err(value),
         }
     }
 
