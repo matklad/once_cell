@@ -1,7 +1,5 @@
 use std::{
-    mem,
-    thread,
-    ptr,
+    mem, thread, ptr,
     cell::Cell,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
@@ -233,6 +231,18 @@ fn unsync_clone() {
     s.set("hello".to_string()).unwrap();
     let c = s.clone();
     assert_eq!(c.get().map(String::as_str), Some("hello"));
+}
+
+#[test]
+#[cfg(feature = "parking_lot")]
+fn sync_get_or_try_init() {
+    let cell: sync::OnceCell<String> = sync::OnceCell::new();
+    assert!(cell.get().is_none());
+    // std::panic::catch_unwind(|| cell.get_or_try_init(|| panic!("oups")));
+    // assert!(cell.get().is_none());
+    assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
+    assert_eq!(cell.get_or_try_init(|| Ok::<_, ()>("hello".to_string())), Ok(&"hello".to_string()));
+    assert_eq!(cell.get(), Some(&"hello".to_string()));
 }
 
 #[test]

@@ -17,9 +17,10 @@ exclude = ["*.png", "*.svg", "/Cargo.lock.min", "/.travis.yml"]
 
 [dependencies]
 parking_lot = { version = "0.8", optional = true, default_features = false }
+lock_api    = { version = "0.2", optional = true, default_features = false }
 
 [features]
-default = [ "parking_lot" ]
+default = [ "parking_lot", "lock_api" ]
 
 [dev-dependencies]
 crossbeam-utils = "0.6.0"
