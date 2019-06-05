@@ -6,7 +6,7 @@ use std::{
     fmt,
 };
 
-use lock_api::RawMutex as _;
+use lock_api::RawMutex as _RawMutex;
 use parking_lot::RawMutex;
 
 pub(crate) struct OnceCell<T> {
