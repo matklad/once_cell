@@ -540,6 +540,8 @@ pub mod sync {
         /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
         ///
+        /// Note that this method requires `parking_lot` Cargo feature.
+        ///
         /// # Panics
         ///
         /// If `f` panics, the panic is propagated to the caller, and
