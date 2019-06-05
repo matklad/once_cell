@@ -178,7 +178,11 @@ mod imp;
 mod imp;
 
 pub mod unsync {
-    use std::{ops::Deref, cell::UnsafeCell};
+    use std::{
+        ops::Deref,
+        cell::UnsafeCell,
+        panic::{UnwindSafe, RefUnwindSafe},
+    };
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -203,6 +207,9 @@ pub mod unsync {
         // Invariant: written to at most once.
         inner: UnsafeCell<Option<T>>,
     }
+
+    impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+    impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
     impl<T> Default for OnceCell<T> {
         fn default() -> Self {

@@ -2,43 +2,29 @@ use std::{
     cell::UnsafeCell,
     sync::atomic::{AtomicBool, Ordering},
     hint::unreachable_unchecked,
+    panic::{UnwindSafe, RefUnwindSafe},
     fmt,
 };
 
 use lock_api::RawMutex as _;
 use parking_lot::RawMutex;
 
-// Wrapper around parking_lot's `RawMutex` which has `const fn` new.
-struct Mutex {
-    inner: RawMutex,
-}
-
-impl Mutex {
-    const fn new() -> Mutex {
-        Mutex { inner: RawMutex::INIT }
-    }
-
-    fn lock(&self) -> MutexGuard<'_> {
-        self.inner.lock();
-        MutexGuard { inner: &self.inner }
-    }
-}
-
-struct MutexGuard<'a> {
-    inner: &'a RawMutex,
-}
-
-impl Drop for MutexGuard<'_> {
-    fn drop(&mut self) {
-        self.inner.unlock();
-    }
-}
-
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
     is_initialized: AtomicBool,
     value: UnsafeCell<Option<T>>,
 }
+
+// Why do we need `T: Send`?
+// Thread A creates a `OnceCell` and shares it with
+// scoped thread B, which fills the cell, which is
+// then destroyed by A. That is, destructor observes
+// a sent value.
+unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
+unsafe impl<T: Send> Send for OnceCell<T> {}
+
+impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 impl<T: fmt::Debug> fmt::Debug for OnceCell<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -143,13 +129,31 @@ impl<T> OnceCell<T> {
     }
 }
 
-// Why do we need `T: Send`?
-// Thread A creates a `OnceCell` and shares it with
-// scoped thread B, which fills the cell, which is
-// then destroyed by A. That is, destructor observes
-// a sent value.
-unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
-unsafe impl<T: Send> Send for OnceCell<T> {}
+/// Wrapper around parking_lot's `RawMutex` which has `const fn` new.
+struct Mutex {
+    inner: RawMutex,
+}
+
+impl Mutex {
+    const fn new() -> Mutex {
+        Mutex { inner: RawMutex::INIT }
+    }
+
+    fn lock(&self) -> MutexGuard<'_> {
+        self.inner.lock();
+        MutexGuard { inner: &self.inner }
+    }
+}
+
+struct MutexGuard<'a> {
+    inner: &'a RawMutex,
+}
+
+impl Drop for MutexGuard<'_> {
+    fn drop(&mut self) {
+        self.inner.unlock();
+    }
+}
 
 #[test]
 #[cfg(pointer_width = "64")]
