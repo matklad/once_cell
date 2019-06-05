@@ -178,7 +178,11 @@ mod imp;
 mod imp;
 
 pub mod unsync {
-    use std::{ops::Deref, cell::UnsafeCell};
+    use std::{
+        ops::Deref,
+        cell::UnsafeCell,
+        panic::{UnwindSafe, RefUnwindSafe},
+    };
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -203,6 +207,9 @@ pub mod unsync {
         // Invariant: written to at most once.
         inner: UnsafeCell<Option<T>>,
     }
+
+    impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+    impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
     impl<T> Default for OnceCell<T> {
         fn default() -> Self {
@@ -280,6 +287,14 @@ pub mod unsync {
         /// Gets the contents of the cell, initializing it with `f`
         /// if the cell was empty.
         ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`. Doing
+        /// so results in a panic.
+        ///
         /// # Example
         /// ```
         /// use once_cell::unsync::OnceCell;
@@ -301,6 +316,14 @@ pub mod unsync {
         /// Gets the contents of the cell, initializing it with `f` if
         /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
+        ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`. Doing
+        /// so results in a panic.
         ///
         /// # Example
         /// ```
@@ -490,6 +513,15 @@ pub mod sync {
         /// concurrently with different initializing functions, but
         /// it is guaranteed that only one function will be executed.
         ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and
+        /// the cell remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`.
+        /// The exact outcome is unspecified. Current implementation
+        /// deadlocks, but this may be changed to a panic in the future.
+        ///
         /// # Example
         /// ```
         /// use once_cell::sync::OnceCell;
@@ -502,6 +534,39 @@ pub mod sync {
         /// ```
         pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
             self.0.get_or_init(f)
+        }
+
+        /// Gets the contents of the cell, initializing it with `f` if
+        /// the cell was empty. If the cell was empty and `f` failed, an
+        /// error is returned.
+        ///
+        /// Note that this method requires `parking_lot` Cargo feature.
+        ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and
+        /// the cell remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`.
+        /// The exact outcome is unspecified. Current implementation
+        /// deadlocks, but this may be changed to a panic in the future.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
+        /// assert!(cell.get().is_none());
+        /// let value = cell.get_or_try_init(|| -> Result<i32, ()> {
+        ///     Ok(92)
+        /// });
+        /// assert_eq!(value, Ok(&92));
+        /// assert_eq!(cell.get(), Some(&92))
+        /// ```
+        #[cfg(feature = "parking_lot")]
+        pub fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+            self.0.get_or_try_init(f)
         }
     }
 

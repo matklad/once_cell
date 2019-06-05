@@ -1,5 +1,6 @@
 use std::{
     cell::UnsafeCell,
+    panic::{UnwindSafe, RefUnwindSafe},
     sync::{
         Once,
         atomic::{AtomicBool, Ordering},
@@ -12,6 +13,17 @@ pub(crate) struct OnceCell<T> {
     value: UnsafeCell<Option<T>>,
     is_initialized: AtomicBool,
 }
+
+// Why do we need `T: Send`?
+// Thread A creates a `OnceCell` and shares it with
+// scoped thread B, which fills the cell, which is
+// then destroyed by A. That is, destructor observes
+// a sent value.
+unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
+unsafe impl<T: Send> Send for OnceCell<T> {}
+
+impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
@@ -76,11 +88,3 @@ impl<T> OnceCell<T> {
         self.is_initialized.store(true, Ordering::SeqCst);
     }
 }
-
-// Why do we need `T: Send`?
-// Thread A creates a `OnceCell` and shares it with
-// scoped thread B, which fills the cell, which is
-// then destroyed by A. That is, destructor observes
-// a sent value.
-unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
-unsafe impl<T: Send> Send for OnceCell<T> {}

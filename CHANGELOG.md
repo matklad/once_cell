@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- implement `sync::OnceCell::get_or_try_init` if `parking_lot` feature is enabled
+- switch internal `unsafe` implementation of `sync::OnceCell` from `Once` to `Mutex`
+- `sync::OnceCell::get_or_init` is twice as fast if cell is already initialized
+- implement `std::panic::RefUnwindSafe` and `std::panic::UnwindSafe` for `OnceCell`
+- better document behavior around panics
+
 ## 0.2.0
 
 - MSRV is now 1.31.1
