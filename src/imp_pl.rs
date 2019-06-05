@@ -40,7 +40,16 @@ impl<T> OnceCell<T> {
             let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
             *slot = Some(value);
         });
-        self.get().unwrap()
+        // Value is definitely initialized here, so we don't need
+        // synchronization or matching of None. While we can use `Self::get`
+        // here, that is twice as slow!
+        unsafe {
+            let value: &Option<T> = &*self.value.get();
+            match value.as_ref() {
+                Some(it) => it,
+                None => std::hint::unreachable_unchecked(),
+            }
+        }
     }
 }
 
