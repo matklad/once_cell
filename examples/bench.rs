@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use once_cell::sync::OnceCell;
 
 const N_THREADS: usize = 32;
@@ -14,6 +16,7 @@ fn main() {
         thread.join().unwrap();
     }
     println!("{:?}", start.elapsed());
+    println!("size_of::<OnceCell<u32>>() = {:?}", size_of::<OnceCell<u32>>());
 }
 
 fn thread_main(i: usize) {
