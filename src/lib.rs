@@ -5,7 +5,7 @@
 might store arbitrary non-`Copy` types, can be assigned to at most once and provide direct access
 to the stored contents. In a nutshell, API looks *roughly* like this:
 
-```no-run
+```rust,ignore
 impl OnceCell<T> {
     fn set(&self, value: T) -> Result<(), T> { ... }
     fn get(&self) -> Option<&T> { ... }
@@ -23,7 +23,7 @@ or `MutexGuard<T>`.
 ## Safe Initialization of global data
 
 
-```
+```rust
 use std::{env, io};
 
 use once_cell::sync::OnceCell;
@@ -56,7 +56,7 @@ fn main() {
 
 This is essentially `lazy_static!` macro, but without a macro.
 
-```
+```rust
 use std::{sync::Mutex, collections::HashMap};
 
 use once_cell::sync::OnceCell;
@@ -74,7 +74,7 @@ fn global_data() -> &'static Mutex<HashMap<i32, String>> {
 
 There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline this pattern:
 
-```
+```rust
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
@@ -94,7 +94,7 @@ fn main() {
 
 Unlike `lazy_static!`, `Lazy` works with local variables.
 
-```
+```rust
 use once_cell::unsync::Lazy;
 
 fn main() {
@@ -109,7 +109,7 @@ fn main() {
 If you need a lazy field in a struct, you probably should use `OnceCell`
 directly, because that will allow you to access `self` during initialization.
 
-```
+```rust
 use std::{fs, path::PathBuf};
 
 use once_cell::unsync::OnceCell;
@@ -147,6 +147,15 @@ Technically, calling `get_or_init` will also cause a panic or a deadlock if it r
 itself. However, because the assignment can happen only once, such cases should be more rare than
 equivalents with `RefCell` and `Mutex`.
 
+# Minimum Supported `rustc` Version
+
+This crate's minimum supported `rustc` version is `1.31.1`.
+
+If optional features are not enabled (`default-features = false` in `Cargo.toml`),
+MSRV will be updated conservatively. When using specific features or default features, MSRV might be updated
+more frequently, up to the latest stable. In both cases, increasing MSRV is not considered a semver-breaking
+change.
+
 # Implementation details
 
 Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs/) and
@@ -154,9 +163,7 @@ Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/
 unifies the APIs of those crates.
 
 To implement a sync flavor of `OnceCell`, this crates uses either `std::sync::Once` or
-`parking_lot::Once`. This is controlled by the `parking_lot` feature, which is enabled by default.
-
-This crate requires rust 1.31.1.
+`parking_lot::Mutex`. This is controlled by the `parking_lot` feature, which is enabled by default.
 
 This crate uses unsafe.
 
