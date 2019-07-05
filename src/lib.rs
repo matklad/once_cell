@@ -353,6 +353,27 @@ pub mod unsync {
             assert!(self.set(val).is_ok(), "reentrant init");
             Ok(self.get().unwrap())
         }
+
+        /// Consumes the `OnceCell`, returning the wrapped value. Returns
+        /// `None` if the cell was empty.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let cell: OnceCell<String> = OnceCell::new();
+        /// assert_eq!(cell.into_inner(), None);
+        ///
+        /// let cell = OnceCell::new();
+        /// cell.set("hello".to_string()).unwrap();
+        /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
+        /// ```
+        pub fn into_inner(self) -> Option<T> {
+            // Because `into_inner` takes `self` by value, the compiler statically verifies
+            // that it is not currently borrowed. So it is safe to move out `Option<T>`.
+            self.inner.into_inner()
+        }
     }
 
     /// A value which is initialized on the first access.
@@ -574,6 +595,25 @@ pub mod sync {
         #[cfg(feature = "parking_lot")]
         pub fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
             self.0.get_or_try_init(f)
+        }
+
+        /// Consumes the `OnceCell`, returning the wrapped value. Returns
+        /// `None` if the cell was empty.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let cell: OnceCell<String> = OnceCell::new();
+        /// assert_eq!(cell.into_inner(), None);
+        ///
+        /// let cell = OnceCell::new();
+        /// cell.set("hello".to_string()).unwrap();
+        /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
+        /// ```
+        pub fn into_inner(self) -> Option<T> {
+            self.0.into_inner()
         }
     }
 
