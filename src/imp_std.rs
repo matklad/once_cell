@@ -79,6 +79,12 @@ impl<T> OnceCell<T> {
         }
     }
 
+    pub(crate) fn into_inner(self) -> Option<T> {
+        // Because `into_inner` takes `self` by value, the compiler statically verifies
+        // that it is not currently borrowed. So it is safe to move out `Option<T>`.
+        self.value.into_inner()
+    }
+
     // Unsafe, because must be guarded by `self.once`.
     unsafe fn set_inner(&self, value: T) {
         let slot: &mut Option<T> = &mut *self.value.get();

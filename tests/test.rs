@@ -269,3 +269,21 @@ fn partialeq_impl() {
     assert!(unsync::OnceCell::<String>::new() == unsync::OnceCell::new());
     assert!(unsync::OnceCell::<String>::new() != unsync::OnceCell::from("value".to_owned()));
 }
+
+#[test]
+fn unsync_into_inner() {
+    let cell: unsync::OnceCell<String> = unsync::OnceCell::new();
+    assert_eq!(cell.into_inner(), None);
+    let cell = unsync::OnceCell::new();
+    cell.set("hello".to_string()).unwrap();
+    assert_eq!(cell.into_inner(), Some("hello".to_string()));
+}
+
+#[test]
+fn sync_into_inner() {
+    let cell: sync::OnceCell<String> = sync::OnceCell::new();
+    assert_eq!(cell.into_inner(), None);
+    let cell = sync::OnceCell::new();
+    cell.set("hello".to_string()).unwrap();
+    assert_eq!(cell.into_inner(), Some("hello".to_string()));
+}
