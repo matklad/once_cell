@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- add `OnceCell::into_inner` which consumes a cell and returns an option
+
 ## 0.2.1
 
 - implement `sync::OnceCell::get_or_try_init` if `parking_lot` feature is enabled
