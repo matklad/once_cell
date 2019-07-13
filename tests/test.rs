@@ -249,6 +249,18 @@ fn unsync_clone() {
     let s = unsync::OnceCell::new();
     let c = s.clone();
     assert!(c.get().is_none());
+
+    s.set("hello".to_string()).unwrap();
+    let c = s.clone();
+    assert_eq!(c.get().map(String::as_str), Some("hello"));
+}
+
+#[test]
+fn sync_clone() {
+    let s = sync::OnceCell::new();
+    let c = s.clone();
+    assert!(c.get().is_none());
+
     s.set("hello".to_string()).unwrap();
     let c = s.clone();
     assert_eq!(c.get().map(String::as_str), Some("hello"));

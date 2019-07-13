@@ -485,6 +485,19 @@ pub mod sync {
         }
     }
 
+    impl<T: Clone> Clone for OnceCell<T> {
+        fn clone(&self) -> OnceCell<T> {
+            let res = OnceCell::new();
+            if let Some(value) = self.get() {
+                match res.set(value.clone()) {
+                    Ok(()) => (),
+                    Err(_) => unreachable!(),
+                }
+            }
+            res
+        }
+    }
+
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
             let cell = Self::new();
