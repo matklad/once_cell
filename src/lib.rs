@@ -506,7 +506,8 @@ pub mod sync {
         }
 
         /// Gets the reference to the underlying value. Returns `None`
-        /// if the cell is empty.
+        /// if the cell is empty, or being initialized. This method does
+        /// not block.
         pub fn get(&self) -> Option<&T> {
             self.0.get()
         }
