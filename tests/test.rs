@@ -2,6 +2,7 @@ use std::{
     mem, thread, ptr,
     cell::Cell,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    sync::Barrier,
 };
 
 use crossbeam_utils::thread::scope;
@@ -224,10 +225,42 @@ fn sync_once_cell_does_not_leak_partially_constructed_boxes() {
 }
 
 #[test]
+fn sync_get_does_not_block() {
+    let cell = sync::OnceCell::new();
+    let barrier = Barrier::new(2);
+    scope(|scope| {
+        scope.spawn(|_| {
+            cell.get_or_init(|| {
+                barrier.wait();
+                barrier.wait();
+                "hello".to_string()
+            });
+        });
+        barrier.wait();
+        assert_eq!(cell.get(), None);
+        barrier.wait();
+    })
+    .unwrap();
+    assert_eq!(cell.get(), Some(&"hello".to_string()));
+}
+
+#[test]
 fn unsync_clone() {
     let s = unsync::OnceCell::new();
     let c = s.clone();
     assert!(c.get().is_none());
+
+    s.set("hello".to_string()).unwrap();
+    let c = s.clone();
+    assert_eq!(c.get().map(String::as_str), Some("hello"));
+}
+
+#[test]
+fn sync_clone() {
+    let s = sync::OnceCell::new();
+    let c = s.clone();
+    assert!(c.get().is_none());
+
     s.set("hello".to_string()).unwrap();
     let c = s.clone();
     assert_eq!(c.get().map(String::as_str), Some("hello"));

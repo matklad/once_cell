@@ -485,6 +485,19 @@ pub mod sync {
         }
     }
 
+    impl<T: Clone> Clone for OnceCell<T> {
+        fn clone(&self) -> OnceCell<T> {
+            let res = OnceCell::new();
+            if let Some(value) = self.get() {
+                match res.set(value.clone()) {
+                    Ok(()) => (),
+                    Err(_) => unreachable!(),
+                }
+            }
+            res
+        }
+    }
+
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
             let cell = Self::new();
@@ -506,7 +519,8 @@ pub mod sync {
         }
 
         /// Gets the reference to the underlying value. Returns `None`
-        /// if the cell is empty.
+        /// if the cell is empty, or being initialized. This method does
+        /// not block.
         pub fn get(&self) -> Option<&T> {
             self.0.get()
         }
