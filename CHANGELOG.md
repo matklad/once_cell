@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- update `parking_lot` to `0.9.0`
+- fix stacked borrows violation in `unsync::OnceCell::get`
+- implement `Clone` for `sync::OnceCell<T> where T: Clone`
+
 ## 0.2.2
 
 - add `OnceCell::into_inner` which consumes a cell and returns an option
