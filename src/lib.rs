@@ -279,10 +279,11 @@ pub mod unsync {
         /// assert!(cell.get().is_some());
         /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
-            let slot = unsafe { &mut *self.inner.get() };
+            let slot = unsafe { &*self.inner.get() };
             if slot.is_some() {
                 return Err(value);
             }
+            let slot = unsafe { &mut*self.inner.get() };
             // This is the only place where we set the slot, no races
             // due to reentrancy/concurrency are possible, and we've
             // checked that slot is currently `None`, so this write
