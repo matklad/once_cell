@@ -9,6 +9,8 @@ use crossbeam_utils::thread::scope;
 
 use once_cell::{sync, unsync};
 
+/// Runs `f` in a separate thread and waits for thread to finish.
+/// `f` can borrow stack data.
 fn go<F: FnOnce() -> ()>(mut f: F) {
     struct Yolo<T>(T);
     unsafe impl<T> Send for Yolo<T> {}

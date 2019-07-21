@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4
+
+- nicer `fmt::Debug` implementation
+
 ## 0.2.3
 
 - update `parking_lot` to `0.9.0`
