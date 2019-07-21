@@ -186,6 +186,7 @@ mod imp;
 
 pub mod unsync {
     use std::{
+        fmt,
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
@@ -209,7 +210,6 @@ pub mod unsync {
     /// assert_eq!(value, "Hello, World!");
     /// assert!(cell.get().is_some());
     /// ```
-    #[derive(Debug)]
     pub struct OnceCell<T> {
         // Invariant: written to at most once.
         inner: UnsafeCell<Option<T>>,
@@ -221,6 +221,15 @@ pub mod unsync {
     impl<T> Default for OnceCell<T> {
         fn default() -> Self {
             Self::new()
+        }
+    }
+
+    impl<T: fmt::Debug> fmt::Debug for OnceCell<T> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self.get() {
+                Some(v) => f.debug_tuple("OnceCell").field(v).finish(),
+                None => f.write_str("OnceCell(Uninit)"),
+            }
         }
     }
 
@@ -453,6 +462,7 @@ pub mod unsync {
 
 pub mod sync {
     use crate::imp::OnceCell as Imp;
+    use std::fmt;
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -477,12 +487,20 @@ pub mod sync {
     /// assert!(value.is_some());
     /// assert_eq!(value.unwrap().as_str(), "Hello, World!");
     /// ```
-    #[derive(Debug)]
     pub struct OnceCell<T>(Imp<T>);
 
     impl<T> Default for OnceCell<T> {
         fn default() -> OnceCell<T> {
             OnceCell::new()
+        }
+    }
+
+    impl<T: fmt::Debug> fmt::Debug for OnceCell<T> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self.get() {
+                Some(v) => f.debug_tuple("OnceCell").field(v).finish(),
+                None => f.write_str("OnceCell(Uninit)"),
+            }
         }
     }
 

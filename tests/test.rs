@@ -320,3 +320,24 @@ fn sync_into_inner() {
     cell.set("hello".to_string()).unwrap();
     assert_eq!(cell.into_inner(), Some("hello".to_string()));
 }
+
+#[test]
+fn debug_impl() {
+    let cell = unsync::OnceCell::new();
+    assert_eq!(format!("{:?}", cell), "OnceCell(Uninit)");
+    cell.set("hello".to_string()).unwrap();
+    assert_eq!(format!("{:?}", cell), "OnceCell(\"hello\")");
+
+    let cell = sync::OnceCell::new();
+    assert_eq!(format!("{:#?}", cell), "OnceCell(Uninit)");
+    cell.set(vec!["hello", "world"]).unwrap();
+    assert_eq!(
+        format!("{:#?}", cell),
+        r#"OnceCell(
+    [
+        "hello",
+        "world",
+    ],
+)"#
+    );
+}
