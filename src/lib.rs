@@ -460,7 +460,7 @@ pub mod unsync {
         }
     }
 
-    impl<T, F: Fn() -> T> Deref for Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
@@ -751,7 +751,7 @@ pub mod sync {
         }
     }
 
-    impl<T, F: Fn() -> T> ::std::ops::Deref for Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> ::std::ops::Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
