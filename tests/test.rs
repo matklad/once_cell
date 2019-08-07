@@ -171,6 +171,7 @@ fn static_lazy_no_macros() {
 fn sync_once_cell_is_sync_send() {
     fn assert_traits<T: Send + Sync>() {}
     assert_traits::<sync::OnceCell<String>>();
+    assert_traits::<sync::Lazy<String>>();
 }
 
 #[test]

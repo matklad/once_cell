@@ -190,7 +190,6 @@ pub mod unsync {
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
-        mem::ManuallyDrop,
     };
 
     /// A cell which can be written to only once. Not thread safe.
@@ -706,8 +705,6 @@ pub mod sync {
         }
     }
 
-    unsafe impl<T: Send, F: Send> Send for Lazy<T, F> {}
-    
     // We never create a `&F` from a `&Lazy<T, F>` so it is fine
     // to not impl `Sync` for `F`
     // we do create a `&mut Option<F>` in `force`, but this is
