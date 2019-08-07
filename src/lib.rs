@@ -190,6 +190,7 @@ pub mod unsync {
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
+        hint::unreachable_unchecked
     };
 
     /// A cell which can be written to only once. Not thread safe.
@@ -409,7 +410,7 @@ pub mod unsync {
     #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: F,
+        init: UnsafeCell<Option<F>>,
     }
 
     impl<T, F> Lazy<T, F> {
@@ -429,11 +430,11 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init }
+            Lazy { cell: OnceCell::new(), init: UnsafeCell::new(Some(init)) }
         }
     }
 
-    impl<T, F: Fn() -> T> Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Lazy<T, F> {
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -448,7 +449,14 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| (this.init)())
+            // Safe because closure is guaranteed to be called at most once
+            // so we only call `F` once, this also guarantees no race conditions
+            this.cell.get_or_init(|| unsafe {
+                match (*this.init.get()).take() {
+                    Some(f) => f(),
+                    None => unreachable_unchecked()
+                }
+            })
         }
     }
 
@@ -462,7 +470,11 @@ pub mod unsync {
 
 pub mod sync {
     use crate::imp::OnceCell as Imp;
-    use std::fmt;
+    use std::{
+        fmt,
+        cell::UnsafeCell,
+        hint::unreachable_unchecked
+    };
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -683,21 +695,37 @@ pub mod sync {
     ///     //   Some("Hoyten")
     /// }
     /// ```
-    #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: F,
+        init: UnsafeCell<Option<F>>,
     }
+
+    impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_struct("Lazy")
+                .field("cell", &self.cell)
+                .field("init", &"..")
+                .finish()
+        }
+    }
+
+    // We never create a `&F` from a `&Lazy<T, F>` so it is fine
+    // to not impl `Sync` for `F`
+    // we do create a `&mut Option<F>` in `force`, but this is
+    // properly synchronized, so it only happens once
+    // so it also does not contribute to this impl
+    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync`
+    unsafe impl<T: Sync, F: Send> Sync for Lazy<T, F> {}
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: f }
+            Lazy { cell: OnceCell::new(), init: UnsafeCell::new(Some(f)) }
         }
     }
 
-    impl<T, F: Fn() -> T> Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Lazy<T, F> {
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -712,7 +740,14 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| (this.init)())
+            // Safe because closure is guaranteed to be called at most once
+            // so we only call `F` once, this also guarantees no race conditions
+            this.cell.get_or_init(|| unsafe {
+                match (*this.init.get()).take() {
+                    Some(f) => f(),
+                    None => unreachable_unchecked()
+                }
+            })
         }
     }
 
