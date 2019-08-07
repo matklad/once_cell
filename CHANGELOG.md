@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- Updated `Lazy`'s `Deref` impl to requires only `FnOnce` instead of `Fn`
+
 ## 0.2.5
 
 - `Lazy` requires only `FnOnce` instead of `Fn`
