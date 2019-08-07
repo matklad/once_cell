@@ -190,6 +190,7 @@ pub mod unsync {
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
+        mem::ManuallyDrop,
     };
 
     /// A cell which can be written to only once. Not thread safe.
@@ -409,7 +410,7 @@ pub mod unsync {
     #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: F,
+        init: ManuallyDrop<F>,
     }
 
     impl<T, F> Lazy<T, F> {
@@ -429,11 +430,11 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init }
+            Lazy { cell: OnceCell::new(), init: ManuallyDrop::new(init) }
         }
     }
 
-    impl<T, F: Fn() -> T> Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Lazy<T, F> {
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -448,7 +449,9 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| (this.init)())
+            // Safe because closure is guaranteed to be called at most once
+            // so we only call `F` once
+            this.cell.get_or_init(|| unsafe { std::ptr::read(&this.init as &F)() })
         }
     }
 
@@ -458,11 +461,26 @@ pub mod unsync {
             Lazy::force(self)
         }
     }
+
+    impl<T, F> Drop for Lazy<T, F> {
+        fn drop(&mut self) {
+            // if not initialized, then `Lazy::force` was never called
+            // this means that `Lazy` still owns `init`, so it must be dropped
+            // no data races because we have a unique reference to `Self`
+            if self.cell.get().is_none() {
+                unsafe {
+                    ManuallyDrop::drop(&mut self.init)
+                }
+            }
+        }
+    }
 }
 
 pub mod sync {
     use crate::imp::OnceCell as Imp;
     use std::fmt;
+
+    use std::mem::ManuallyDrop;
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -686,18 +704,18 @@ pub mod sync {
     #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: F,
+        init: ManuallyDrop<F>,
     }
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: f }
+            Lazy { cell: OnceCell::new(), init: ManuallyDrop::new(f) }
         }
     }
 
-    impl<T, F: Fn() -> T> Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Lazy<T, F> {
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -712,7 +730,9 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| (this.init)())
+            // Safe because closure is guaranteed to be called at most once
+            // so we only call `F` once
+            this.cell.get_or_init(|| unsafe { std::ptr::read(&this.init as &F)() })
         }
     }
 
@@ -720,6 +740,19 @@ pub mod sync {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
+        }
+    }
+
+    impl<T, F> Drop for Lazy<T, F> {
+        fn drop(&mut self) {
+            // if not initialized, then `Lazy::force` was never called
+            // this means that `Lazy` still owns `init`, so it must be dropped
+            // no data races because we have a unique reference to `Self`
+            if self.cell.get().is_none() {
+                unsafe {
+                    ManuallyDrop::drop(&mut self.init)
+                }
+            }
         }
     }
 }
