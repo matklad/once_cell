@@ -692,11 +692,29 @@ pub mod sync {
     ///     //   Some("Hoyten")
     /// }
     /// ```
-    #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
         init: UnsafeCell<Option<F>>,
     }
+
+    impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_struct("Lazy")
+                .field("cell", &self.cell)
+                .field("init", &"..")
+                .finish()
+        }
+    }
+
+    unsafe impl<T: Send, F: Send> Send for Lazy<T, F> {}
+    
+    // We never create a `&F` from a `&Lazy<T, F>` so it is fine
+    // to not impl `Sync` for `F`
+    // we do create a `&mut Option<F>` in `force`, but this is
+    // properly synchronized, so it only happens once
+    // so it also does not contribute to this impl
+    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync`
+    unsafe impl<T: Sync, F: Send> Sync for Lazy<T, F> {}
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
