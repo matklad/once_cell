@@ -190,6 +190,7 @@ pub mod unsync {
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
+        hint::unreachable_unchecked
     };
 
     /// A cell which can be written to only once. Not thread safe.
@@ -453,7 +454,7 @@ pub mod unsync {
             this.cell.get_or_init(|| unsafe {
                 match (*this.init.get()).take() {
                     Some(f) => f(),
-                    None => std::hint::unreachable_unchecked()
+                    None => unreachable_unchecked()
                 }
             })
         }
@@ -469,8 +470,11 @@ pub mod unsync {
 
 pub mod sync {
     use crate::imp::OnceCell as Imp;
-    use std::fmt;
-    use std::cell::UnsafeCell;
+    use std::{
+        fmt,
+        cell::UnsafeCell,
+        hint::unreachable_unchecked
+    };
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -741,7 +745,7 @@ pub mod sync {
             this.cell.get_or_init(|| unsafe {
                 match (*this.init.get()).take() {
                     Some(f) => f(),
-                    None => std::hint::unreachable_unchecked()
+                    None => unreachable_unchecked()
                 }
             })
         }
