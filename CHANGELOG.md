@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- `Lazy` requires only `FnOnce` instead of `Fn`
+
 ## 0.2.4
 
 - nicer `fmt::Debug` implementation
