@@ -190,7 +190,7 @@ pub mod unsync {
         ops::Deref,
         cell::UnsafeCell,
         panic::{UnwindSafe, RefUnwindSafe},
-        hint::unreachable_unchecked
+        hint::unreachable_unchecked,
     };
 
     /// A cell which can be written to only once. Not thread safe.
@@ -293,7 +293,7 @@ pub mod unsync {
             if slot.is_some() {
                 return Err(value);
             }
-            let slot = unsafe { &mut*self.inner.get() };
+            let slot = unsafe { &mut *self.inner.get() };
             // This is the only place where we set the slot, no races
             // due to reentrancy/concurrency are possible, and we've
             // checked that slot is currently `None`, so this write
@@ -454,7 +454,7 @@ pub mod unsync {
             this.cell.get_or_init(|| unsafe {
                 match (*this.init.get()).take() {
                     Some(f) => f(),
-                    None => unreachable_unchecked()
+                    None => unreachable_unchecked(),
                 }
             })
         }
@@ -470,11 +470,7 @@ pub mod unsync {
 
 pub mod sync {
     use crate::imp::OnceCell as Imp;
-    use std::{
-        fmt,
-        cell::UnsafeCell,
-        hint::unreachable_unchecked
-    };
+    use std::{fmt, cell::UnsafeCell, hint::unreachable_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -702,10 +698,7 @@ pub mod sync {
 
     impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.debug_struct("Lazy")
-                .field("cell", &self.cell)
-                .field("init", &"..")
-                .finish()
+            f.debug_struct("Lazy").field("cell", &self.cell).field("init", &"..").finish()
         }
     }
 
@@ -745,7 +738,7 @@ pub mod sync {
             this.cell.get_or_init(|| unsafe {
                 match (*this.init.get()).take() {
                     Some(f) => f(),
-                    None => unreachable_unchecked()
+                    None => unreachable_unchecked(),
                 }
             })
         }
