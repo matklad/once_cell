@@ -609,8 +609,6 @@ pub mod sync {
         /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
         ///
-        /// Note that this method requires `parking_lot` Cargo feature.
-        ///
         /// # Panics
         ///
         /// If `f` panics, the panic is propagated to the caller, and
@@ -633,7 +631,6 @@ pub mod sync {
         /// assert_eq!(value, Ok(&92));
         /// assert_eq!(cell.get(), Some(&92))
         /// ```
-        #[cfg(feature = "parking_lot")]
         pub fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
             self.0.get_or_try_init(f)
         }

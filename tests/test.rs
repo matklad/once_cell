@@ -270,7 +270,6 @@ fn sync_clone() {
 }
 
 #[test]
-#[cfg(feature = "parking_lot")]
 fn sync_get_or_try_init() {
     let cell: sync::OnceCell<String> = sync::OnceCell::new();
     assert!(cell.get().is_none());
