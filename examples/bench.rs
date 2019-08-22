@@ -16,7 +16,9 @@ fn main() {
         thread.join().unwrap();
     }
     println!("{:?}", start.elapsed());
-    println!("size_of::<OnceCell<u32>>() = {:?}", size_of::<OnceCell<u32>>());
+    println!("size_of::<OnceCell<()>>()   = {:?}", size_of::<OnceCell<()>>());
+    println!("size_of::<OnceCell<bool>>() = {:?}", size_of::<OnceCell<bool>>());
+    println!("size_of::<OnceCell<u32>>()  = {:?}", size_of::<OnceCell<u32>>());
 }
 
 fn thread_main(i: usize) {

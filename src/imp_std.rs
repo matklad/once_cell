@@ -74,7 +74,11 @@ impl<T> OnceCell<T> {
     pub(crate) fn get(&self) -> Option<&T> {
         if self.is_completed() {
             let slot: &Option<T> = unsafe { &*self.value.get() };
-            slot.as_ref()
+            match slot {
+                Some(value) => Some(value),
+                // This unsafe does improve performance, see `examples/bench`.
+                None => unsafe { std::hint::unreachable_unchecked() },
+            }
         } else {
             None
         }
