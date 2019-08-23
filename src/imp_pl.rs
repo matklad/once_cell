@@ -56,39 +56,6 @@ impl<T> OnceCell<T> {
         }
     }
 
-    pub(crate) fn set(&self, value: T) -> Result<(), T> {
-        let mut value = Some(value);
-        {
-            // We *could* optimistically check here if cell is initialized, but
-            // we don't do that, assuming that `set` actually sets the value
-            // most of the time.
-            let _guard = self.mutex.lock();
-            // Relaxed loads are OK under the mutex, because it's mutex
-            // unlock/lock that establishes "happens before".
-            if !self.is_initialized.load(Ordering::Relaxed) {
-                // Uniqueness of reference is guaranteed my mutex and flag
-                let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
-                debug_assert!(slot.is_none());
-                *slot = value.take();
-                // This `Release` guarantees that `get` sees only fully stored
-                // value
-                self.is_initialized.store(true, Ordering::Release);
-            }
-        }
-        match value {
-            None => Ok(()),
-            Some(value) => Err(value),
-        }
-    }
-
-    pub(crate) fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
-        enum Void {}
-        match self.get_or_try_init(|| Ok::<T, Void>(f())) {
-            Ok(val) => val,
-            Err(void) => match void {},
-        }
-    }
-
     pub(crate) fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
         // Standard double-checked locking pattern.
 
