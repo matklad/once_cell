@@ -84,23 +84,6 @@ impl<T> OnceCell<T> {
         }
     }
 
-    pub(crate) fn set(&self, value: T) -> Result<(), T> {
-        let mut value = Some(value);
-        self.get_or_init(|| value.take().unwrap());
-        match value {
-            None => Ok(()),
-            Some(value) => Err(value),
-        }
-    }
-
-    pub(crate) fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
-        enum Void {}
-        match self.get_or_try_init(move || Ok::<T, Void>(f())) {
-            Ok(value) => value,
-            Err(void) => match void {},
-        }
-    }
-
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
@@ -251,13 +234,20 @@ mod tests {
     use std::{panic, sync::mpsc::channel, thread};
     use super::OnceCell;
 
+    impl<T> OnceCell<T> {
+        fn init(&self, f: impl FnOnce() -> T) {
+            enum Void {}
+            let _ = self.get_or_try_init(|| Ok::<T, Void>(f()));
+        }
+    }
+
     #[test]
     fn smoke_once() {
         static O: OnceCell<()> = OnceCell::new();
         let mut a = 0;
-        O.get_or_init(|| a += 1);
+        O.init(|| a += 1);
         assert_eq!(a, 1);
-        O.get_or_init(|| a += 1);
+        O.init(|| a += 1);
         assert_eq!(a, 1);
     }
 
@@ -274,7 +264,7 @@ mod tests {
                     thread::yield_now()
                 }
                 unsafe {
-                    O.get_or_init(|| {
+                    O.init(|| {
                         assert!(!RUN);
                         RUN = true;
                     });
@@ -285,7 +275,7 @@ mod tests {
         }
 
         unsafe {
-            O.get_or_init(|| {
+            O.init(|| {
                 assert!(!RUN);
                 RUN = true;
             });
@@ -303,19 +293,19 @@ mod tests {
 
         // poison the once
         let t = panic::catch_unwind(|| {
-            O.get_or_init(|| panic!());
+            O.init(|| panic!());
         });
         assert!(t.is_err());
 
         // we can subvert poisoning, however
         let mut called = false;
-        O.get_or_init(|| {
+        O.init(|| {
             called = true;
         });
         assert!(called);
 
         // once any success happens, we stop propagating the poison
-        O.get_or_init(|| {});
+        O.init(|| {});
     }
 
     #[test]
@@ -324,7 +314,7 @@ mod tests {
 
         // poison the once
         let t = panic::catch_unwind(|| {
-            O.get_or_init(|| panic!());
+            O.init(|| panic!());
         });
         assert!(t.is_err());
 
@@ -332,7 +322,7 @@ mod tests {
         let (tx1, rx1) = channel();
         let (tx2, rx2) = channel();
         let t1 = thread::spawn(move || {
-            O.get_or_init(|| {
+            O.init(|| {
                 tx1.send(()).unwrap();
                 rx2.recv().unwrap();
             });
@@ -343,7 +333,7 @@ mod tests {
         // put another waiter on the once
         let t2 = thread::spawn(|| {
             let mut called = false;
-            O.get_or_init(|| {
+            O.init(|| {
                 called = true;
             });
             assert!(!called);

@@ -324,7 +324,10 @@ pub mod unsync {
         /// let value = cell.get_or_init(|| unreachable!());
         /// assert_eq!(value, &92);
         /// ```
-        pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
+        pub fn get_or_init<F>(&self, f: F) -> &T
+        where
+            F: FnOnce() -> T,
+        {
             enum Void {}
             match self.get_or_try_init(|| Ok::<T, Void>(f())) {
                 Ok(val) => val,
@@ -357,7 +360,10 @@ pub mod unsync {
         /// assert_eq!(value, Ok(&92));
         /// assert_eq!(cell.get(), Some(&92))
         /// ```
-        pub fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+        pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
+        where
+            F: FnOnce() -> Result<T, E>,
+        {
             if let Some(val) = self.get() {
                 return Ok(val);
             }
@@ -575,7 +581,12 @@ pub mod sync {
         /// }
         /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
-            self.0.set(value)
+            let mut value = Some(value);
+            self.get_or_init(|| value.take().unwrap());
+            match value {
+                None => Ok(()),
+                Some(value) => Err(value),
+            }
         }
 
         /// Gets the contents of the cell, initializing it with `f`
@@ -602,8 +613,15 @@ pub mod sync {
         /// let value = cell.get_or_init(|| unreachable!());
         /// assert_eq!(value, &92);
         /// ```
-        pub fn get_or_init<F: FnOnce() -> T>(&self, f: F) -> &T {
-            self.0.get_or_init(f)
+        pub fn get_or_init<F>(&self, f: F) -> &T
+        where
+            F: FnOnce() -> T,
+        {
+            enum Void {}
+            match self.get_or_try_init(|| Ok::<T, Void>(f())) {
+                Ok(val) => val,
+                Err(void) => match void {},
+            }
         }
 
         /// Gets the contents of the cell, initializing it with `f` if
@@ -632,7 +650,10 @@ pub mod sync {
         /// assert_eq!(value, Ok(&92));
         /// assert_eq!(cell.get(), Some(&92))
         /// ```
-        pub fn get_or_try_init<F: FnOnce() -> Result<T, E>, E>(&self, f: F) -> Result<&T, E> {
+        pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
+        where
+            F: FnOnce() -> Result<T, E>,
+        {
             self.0.get_or_try_init(f)
         }
 
