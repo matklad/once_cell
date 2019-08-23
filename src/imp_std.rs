@@ -18,6 +18,10 @@ pub(crate) struct OnceCell<T> {
     // `Waiter`, so we add the `PhantomData` appropriately.
     state: AtomicUsize,
     _marker: PhantomData<*mut Waiter>,
+    // FIXME: switch to `std::mem::MaybeUninit` once we are ready to bump MSRV
+    // that far. It was stabilized in 1.36.0, so, if you are reading this and
+    // it's higher than 1.46.0 outside, please send a PR! ;) (and to the same
+    // for `Lazy`, while we are at it).
     value: UnsafeCell<Option<T>>,
 }
 
