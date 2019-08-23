@@ -22,7 +22,6 @@ or `MutexGuard<T>`.
 
 ## Safe Initialization of global data
 
-
 ```rust
 use std::{env, io};
 
@@ -133,7 +132,7 @@ impl Ctx {
 
 |`!Sync` types         | Access Mode            | Drawbacks                                     |
 |----------------------|------------------------|-----------------------------------------------|
-|`Cell<T>`             | `T`                    | works only with `Copy` types                  |
+|`Cell<T>`             | `T`                    | requires `T: Copy` for `get`                  |
 |`RefCel<T>`           | `RefMut<T>` / `Ref<T>` | may panic at runtime                          |
 |`unsync::OnceCell<T>` | `&T`                   | assignable only once                          |
 
@@ -152,18 +151,20 @@ equivalents with `RefCell` and `Mutex`.
 This crate's minimum supported `rustc` version is `1.31.1`.
 
 If optional features are not enabled (`default-features = false` in `Cargo.toml`),
-MSRV will be updated conservatively. When using specific features or default features, MSRV might be updated
-more frequently, up to the latest stable. In both cases, increasing MSRV is not considered a semver-breaking
-change.
+MSRV will be updated conservatively. When using specific features or default features,
+MSRV might be updated more frequently, up to the latest stable. In both cases, increasing MSRV
+is *not* considered a semver-breaking change.
 
 # Implementation details
 
-Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs/) and
-[`lazy_cell`](https://github.com/indiv0/lazycell/) crates and in some sense just streamlines and
-unifies the APIs of those crates.
+Implementation is based on [`lazy_static`](https://github.com/rust-lang-nursery/lazy-static.rs/)
+and [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and `std::sync::Once`. In some sense,
+`once_cell` just streamlines and unifies those APIs.
 
-To implement a sync flavor of `OnceCell`, this crates uses either `std::sync::Once` or
-`parking_lot::Mutex`. This is controlled by the `parking_lot` feature, which is enabled by default.
+To implement a sync flavor of `OnceCell`, this crates uses either a custom re-implementation of
+`std::sync::Once` or `parking_lot::Mutex`. This is controlled by the `parking_lot` feature, which
+is enabled by default. Performance is the same for both cases, but parking_lot based `OnceCell<T>`
+is smaller by up to 16 bytes.
 
 This crate uses unsafe.
 
