@@ -270,7 +270,6 @@ fn sync_clone() {
 }
 
 #[test]
-#[cfg(feature = "parking_lot")]
 fn sync_get_or_try_init() {
     let cell: sync::OnceCell<String> = sync::OnceCell::new();
     assert!(cell.get().is_none());
@@ -343,4 +342,42 @@ fn debug_impl() {
     ],
 )"#
     );
+}
+
+#[test]
+#[should_panic]
+fn unsync_reentrant_init() {
+    let cell = unsync::OnceCell::<u32>::new();
+    cell.get_or_init(|| {
+        cell.get_or_init(|| 1);
+        2
+    });
+}
+
+#[test]
+fn sync_reentrant_init() {
+    let examples_dir = {
+        let mut exe = std::env::current_exe().unwrap();
+        exe.pop();
+        exe.pop();
+        exe.push("examples");
+        exe
+    };
+    let bin = examples_dir
+        .join("reentrant_init_deadlocks")
+        .with_extension(std::env::consts::EXE_EXTENSION);
+    let mut guard = Guard { child: std::process::Command::new(bin).spawn().unwrap() };
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let status = guard.child.try_wait().unwrap();
+    assert!(status.is_none());
+
+    struct Guard {
+        child: std::process::Child,
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+        }
+    }
 }
