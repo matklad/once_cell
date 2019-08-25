@@ -7,6 +7,7 @@ to the stored contents. In a nutshell, API looks *roughly* like this:
 
 ```rust,ignore
 impl OnceCell<T> {
+    fn new() -> OnceCell<T> { ... }
     fn set(&self, value: T) -> Result<(), T> { ... }
     fn get(&self) -> Option<&T> { ... }
 }
