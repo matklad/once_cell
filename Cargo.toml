@@ -16,14 +16,19 @@ categories = ["rust-patterns", "memory-management"]
 exclude = ["*.png", "*.svg", "/Cargo.lock.min", "/.travis.yml"]
 
 [dependencies]
+# Uses parking_lot to implement once_cell::sync::OnceCell.
+# This makes not speed difference, but makes each OnceCell<T>
+# for up to two bytes smaller, depending on the size of the T.
 parking_lot = { version = "0.9.0", optional = true, default_features = false }
-
-[features]
-default = ["std"]
-std = []
 
 [dev-dependencies]
 crossbeam-utils = "0.6.0"
+regex = { version = "1.2.0", default-features = false }
+
+[features]
+default = ["std"]
+# Enables `once_cell::sync` module.
+std = []
 
 [[example]]
 name = "reentrant_init_deadlocks"
