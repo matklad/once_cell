@@ -129,6 +129,23 @@ impl Ctx {
 }
 ```
 
+## Building block
+
+Naturally, it is  possible to build other abstractions on top of `OnceCell`.
+For example, this is a `regex!` macro which takes a string literal and returns an
+*expression* that evaluates to `&'static Regex`:
+
+```
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+```
+
+This macro can be useful to avoid "compile regex on every loop iteration" problem.
+
 # Comparison with std
 
 |`!Sync` types         | Access Mode            | Drawbacks                                     |
