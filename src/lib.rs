@@ -179,21 +179,21 @@ This crate uses unsafe.
 
 */
 
+#[cfg(feature = "std")]
 #[cfg(feature = "parking_lot")]
 #[path = "imp_pl.rs"]
 mod imp;
+
+#[cfg(feature = "std")]
 #[cfg(not(feature = "parking_lot"))]
 #[path = "imp_std.rs"]
 mod imp;
 
 pub mod unsync {
-    use std::{
-        fmt,
-        ops::Deref,
-        cell::UnsafeCell,
-        panic::{UnwindSafe, RefUnwindSafe},
-        hint::unreachable_unchecked,
-    };
+    use core::{fmt, ops::Deref, cell::UnsafeCell, hint::unreachable_unchecked};
+
+    #[cfg(feature = "std")]
+    use std::panic::{RefUnwindSafe, UnwindSafe};
 
     /// A cell which can be written to only once. Not thread safe.
     ///
@@ -218,7 +218,9 @@ pub mod unsync {
         inner: UnsafeCell<Option<T>>,
     }
 
+    #[cfg(feature = "std")]
     impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+    #[cfg(feature = "std")]
     impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
     impl<T> Default for OnceCell<T> {
@@ -476,6 +478,7 @@ pub mod unsync {
     }
 }
 
+#[cfg(feature = "std")]
 pub mod sync {
     use crate::imp::OnceCell as Imp;
     use std::{fmt, cell::UnsafeCell, hint::unreachable_unchecked};
