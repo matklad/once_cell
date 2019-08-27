@@ -747,8 +747,11 @@ pub mod sync {
     // we do create a `&mut Option<F>` in `force`, but this is
     // properly synchronized, so it only happens once
     // so it also does not contribute to this impl
-    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync`
-    unsafe impl<T: Sync, F: Send> Sync for Lazy<T, F> {}
+    //
+    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync + Send`.
+    // `+ Send` is needed for the same reason as in `OnceCell<T>`.
+    unsafe impl<T: Sync + Send, F: Send> Sync for Lazy<T, F> {}
+    unsafe impl<T: Send, F: Send> Send for Lazy<T, F> {}
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
