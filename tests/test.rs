@@ -115,6 +115,7 @@ mod unsync {
 
 #[cfg(feature = "std")]
 mod sync {
+    #[cfg(not(miri))] // miri doesn't support threads
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
     #[cfg(not(miri))] // miri doesn't support threads
