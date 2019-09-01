@@ -1,10 +1,10 @@
 mod unsync {
     use core::{
-        sync::atomic::{AtomicUsize, Ordering::SeqCst},
         cell::Cell,
+        sync::atomic::{AtomicUsize, Ordering::SeqCst},
     };
 
-    use once_cell::unsync::{OnceCell, Lazy};
+    use once_cell::unsync::{Lazy, OnceCell};
 
     #[test]
     fn unsync_once_cell() {
@@ -117,7 +117,7 @@ mod unsync {
 mod sync {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use once_cell::sync::{OnceCell, Lazy};
+    use once_cell::sync::{Lazy, OnceCell};
 
     #[cfg(not(miri))] // miri doesn't support threads
     mod scope {
@@ -153,7 +153,8 @@ mod sync {
                 c.get_or_init(|| 92);
                 assert_eq!(c.get(), Some(&92));
             });
-        }).unwrap();
+        })
+        .unwrap();
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
     }
@@ -175,7 +176,8 @@ mod sync {
                 assert_eq!(DROP_CNT.load(SeqCst), 0);
                 drop(x);
             });
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(DROP_CNT.load(SeqCst), 1);
     }
 
@@ -301,7 +303,8 @@ mod sync {
                 assert_eq!(y, 62);
                 assert_eq!(called.load(SeqCst), 1);
             });
-        }).unwrap();
+        })
+        .unwrap();
 
         let y = *x - 30;
         assert_eq!(y, 62);
@@ -322,7 +325,8 @@ mod sync {
             s.spawn(|_| {
                 assert_eq!(&*XS, &vec![1, 2, 3]);
             });
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(&*XS, &vec![1, 2, 3]);
     }
 

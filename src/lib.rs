@@ -206,7 +206,7 @@ mod imp;
 mod imp;
 
 pub mod unsync {
-    use core::{fmt, ops::Deref, cell::UnsafeCell, hint::unreachable_unchecked};
+    use core::{cell::UnsafeCell, fmt, hint::unreachable_unchecked, ops::Deref};
 
     #[cfg(feature = "std")]
     use std::panic::{RefUnwindSafe, UnwindSafe};
@@ -505,7 +505,7 @@ pub mod unsync {
 
 #[cfg(feature = "std")]
 pub mod sync {
-    use std::{fmt, cell::UnsafeCell, hint::unreachable_unchecked};
+    use std::{cell::UnsafeCell, fmt, hint::unreachable_unchecked};
 
     use crate::imp::OnceCell as Imp;
 

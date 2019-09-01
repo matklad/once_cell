@@ -9,9 +9,8 @@ static CELL: OnceCell<usize> = OnceCell::new();
 
 fn main() {
     let start = std::time::Instant::now();
-    let threads = (0..N_THREADS)
-        .map(|i| std::thread::spawn(move || thread_main(i)))
-        .collect::<Vec<_>>();
+    let threads =
+        (0..N_THREADS).map(|i| std::thread::spawn(move || thread_main(i))).collect::<Vec<_>>();
     for thread in threads {
         thread.join().unwrap();
     }

@@ -5,11 +5,11 @@
 
 use std::{
     cell::UnsafeCell,
-    panic::{UnwindSafe, RefUnwindSafe},
     marker::PhantomData,
+    panic::{RefUnwindSafe, UnwindSafe},
     ptr,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     thread::{self, Thread},
-    sync::atomic::{AtomicUsize, AtomicBool, Ordering},
 };
 
 #[derive(Debug)]
@@ -237,7 +237,7 @@ impl Drop for Finish<'_> {
 mod tests {
     use std::panic;
     #[cfg(not(miri))] // miri doesn't support threads
-    use std::{thread, sync::mpsc::channel};
+    use std::{sync::mpsc::channel, thread};
 
     use super::OnceCell;
 
@@ -261,7 +261,6 @@ mod tests {
     #[test]
     #[cfg(not(miri))] // miri doesn't support threads
     fn stampede_once() {
-
         static O: OnceCell<()> = OnceCell::new();
         static mut RUN: bool = false;
 

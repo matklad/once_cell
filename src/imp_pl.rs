@@ -1,15 +1,12 @@
 use std::{
     cell::UnsafeCell,
-    sync::atomic::{AtomicBool, Ordering},
-    hint::unreachable_unchecked,
-    panic::{UnwindSafe, RefUnwindSafe},
     fmt,
+    hint::unreachable_unchecked,
+    panic::{RefUnwindSafe, UnwindSafe},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-use parking_lot::{
-    RawMutex,
-    lock_api::RawMutex as _RawMutex,
-};
+use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
