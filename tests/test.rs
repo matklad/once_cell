@@ -115,16 +115,36 @@ mod unsync {
 
 #[cfg(feature = "std")]
 mod sync {
-    #[cfg(not(miri))] // miri doesn't support threads
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-
-    #[cfg(not(miri))] // miri doesn't support threads
-    use crossbeam_utils::thread::scope;
 
     use once_cell::sync::{OnceCell, Lazy};
 
-    #[test]
     #[cfg(not(miri))] // miri doesn't support threads
+    mod scope {
+        pub(super) use crossbeam_utils::thread::scope;
+    }
+
+    #[cfg(miri)]
+    mod scope {
+        pub(super) struct Scope;
+
+        #[cfg(miri)]
+        impl Scope {
+            pub(super) fn spawn(&self, f: impl FnOnce(())) {
+                f(());
+            }
+        }
+
+        #[cfg(miri)]
+        pub(super) fn scope(f: impl FnOnce(&Scope)) -> Result<(), ()> {
+            f(&Scope);
+            Ok(())
+        }
+    }
+
+    use scope::scope;
+
+    #[test]
     fn once_cell() {
         let c = OnceCell::new();
         assert!(c.get().is_none());
@@ -139,7 +159,6 @@ mod sync {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
     fn once_cell_drop() {
         static DROP_CNT: AtomicUsize = AtomicUsize::new(0);
         struct Dropper;
@@ -267,7 +286,6 @@ mod sync {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
     fn lazy_new() {
         let called = AtomicUsize::new(0);
         let x = Lazy::new(|| {
@@ -291,7 +309,7 @@ mod sync {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
+    #[cfg(not(miri))] // leaks memory
     fn static_lazy() {
         static XS: Lazy<Vec<i32>> = Lazy::new(|| {
             let mut xs = Vec::new();
@@ -360,7 +378,7 @@ mod sync {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
+    #[cfg(not(miri))] // deadlocks without real threads
     fn once_cell_does_not_leak_partially_constructed_boxes() {
         let n_tries = 100;
         let n_readers = 10;
@@ -387,7 +405,7 @@ mod sync {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
+    #[cfg(not(miri))] // miri doesn't support Barrier
     fn get_does_not_block() {
         use std::sync::Barrier;
 
