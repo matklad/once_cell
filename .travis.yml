@@ -4,18 +4,25 @@ branches:
     - master
     - trying
 
-
 language: rust
-rust:
-  - stable
-  - beta
-
-script:
-  - cargo test
-  - cargo test --release
 
 matrix:
   include:
+  - name: "miri"
+    script:
+    - rm -rf ./target
+    - ./run-miri-tests.sh
+
+  - rust: stable
+    script:
+    - cargo test
+    - cargo test --release
+
+  - rust: beta
+    script:
+    - cargo test
+    - cargo test --release
+
   - rust: stable
     script:
     - cargo test --no-default-features --features std
@@ -29,6 +36,3 @@ matrix:
     script:
     - mv Cargo.lock.min Cargo.lock
     - cargo build
-  - script:
-    - rm -rf ./target
-    - ./run-miri-tests.sh
