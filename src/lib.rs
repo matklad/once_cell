@@ -760,12 +760,9 @@ pub mod sync {
     // to not impl `Sync` for `F`
     // we do create a `&mut Option<F>` in `force`, but this is
     // properly synchronized, so it only happens once
-    // so it also does not contribute to this impl
-    //
-    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync + Send`.
-    // `+ Send` is needed for the same reason as in `OnceCell<T>`.
-    unsafe impl<T: Sync + Send, F: Send> Sync for Lazy<T, F> {}
-    unsafe impl<T: Send, F: Send> Send for Lazy<T, F> {}
+    // so it also does not contribute to this impl.
+    unsafe impl<T, F: Send> Sync for Lazy<T, F> where OnceCell<T>: Sync {}
+    // auto-derived `Send` impl is OK.
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
@@ -807,4 +804,21 @@ pub mod sync {
             Lazy::force(self)
         }
     }
+
+    /// ```compile_fail
+    /// struct S(*mut ());
+    /// unsafe impl Sync for S {}
+    ///
+    /// fn share<T: Sync>(_: &T) {}
+    /// share(&once_cell::sync::OnceCell::<S>::new());
+    /// ```
+    ///
+    /// ```compile_fail
+    /// struct S(*mut ());
+    /// unsafe impl Sync for S {}
+    ///
+    /// fn share<T: Sync>(_: &T) {}
+    /// share(&once_cell::sync::Lazy::<S>::new(|| unimplemented!()));
+    /// ```
+    fn _dummy() {}
 }
