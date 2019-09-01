@@ -103,6 +103,17 @@ mod unsync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support panics
+    #[cfg(feature = "std")]
+    fn lazy_poisoning() {
+        let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
+        for _ in 0..2 {
+            let res = std::panic::catch_unwind(|| x.len());
+            assert!(res.is_err());
+        }
+    }
+
+    #[test]
     fn aliasing_in_get() {
         let x = once_cell::unsync::OnceCell::new();
         x.set(42).unwrap();
@@ -344,6 +355,16 @@ mod sync {
             })
         }
         assert_eq!(xs(), &vec![1, 2, 3]);
+    }
+
+    #[test]
+    #[cfg(not(miri))] // miri doesn't support panics
+    fn lazy_poisoning() {
+        let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
+        for _ in 0..2 {
+            let res = std::panic::catch_unwind(|| x.len());
+            assert!(res.is_err());
+        }
     }
 
     #[test]
