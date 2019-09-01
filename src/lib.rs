@@ -6,7 +6,7 @@ might store arbitrary non-`Copy` types, can be assigned to at most once and prov
 to the stored contents. In a nutshell, API looks *roughly* like this:
 
 ```rust,ignore
-impl OnceCell<T> {
+impl<T> OnceCell<T> {
     fn new() -> OnceCell<T> { ... }
     fn set(&self, value: T) -> Result<(), T> { ... }
     fn get(&self) -> Option<&T> { ... }
@@ -129,6 +129,23 @@ impl Ctx {
 }
 ```
 
+## Building block
+
+Naturally, it is  possible to build other abstractions on top of `OnceCell`.
+For example, this is a `regex!` macro which takes a string literal and returns an
+*expression* that evaluates to a `&'static Regex`:
+
+```
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+```
+
+This macro can be useful to avoid "compile regex on every loop iteration" problem.
+
 # Comparison with std
 
 |`!Sync` types         | Access Mode            | Drawbacks                                     |
@@ -151,10 +168,9 @@ equivalents with `RefCell` and `Mutex`.
 
 This crate's minimum supported `rustc` version is `1.31.1`.
 
-If optional features are not enabled (`default-features = false` in `Cargo.toml`),
-MSRV will be updated conservatively. When using specific features or default features,
-MSRV might be updated more frequently, up to the latest stable. In both cases, increasing MSRV
-is *not* considered a semver-breaking change.
+If only `std` feature is enabled, MSRV will be updated conservatively.
+When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.
+In both cases, increasing MSRV is *not* considered a semver-breaking change.
 
 # Implementation details
 
@@ -164,7 +180,7 @@ and [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and `std::sync::On
 
 To implement a sync flavor of `OnceCell`, this crates uses either a custom re-implementation of
 `std::sync::Once` or `parking_lot::Mutex`. This is controlled by the `parking_lot` feature, which
-is enabled by default. Performance is the same for both cases, but parking_lot based `OnceCell<T>`
+is enabled by default. Performance is the same for both cases, but `parking_lot` based `OnceCell<T>`
 is smaller by up to 16 bytes.
 
 This crate uses unsafe.
@@ -179,25 +195,25 @@ This crate uses unsafe.
 
 */
 
+#[cfg(feature = "std")]
 #[cfg(feature = "parking_lot")]
 #[path = "imp_pl.rs"]
 mod imp;
+
+#[cfg(feature = "std")]
 #[cfg(not(feature = "parking_lot"))]
 #[path = "imp_std.rs"]
 mod imp;
 
 pub mod unsync {
-    use std::{
-        fmt,
-        ops::Deref,
-        cell::UnsafeCell,
-        panic::{UnwindSafe, RefUnwindSafe},
-        hint::unreachable_unchecked,
-    };
+    use core::{cell::UnsafeCell, fmt, hint::unreachable_unchecked, ops::Deref};
+
+    #[cfg(feature = "std")]
+    use std::panic::{RefUnwindSafe, UnwindSafe};
 
     /// A cell which can be written to only once. Not thread safe.
     ///
-    /// Unlike `::std::cell::RefCell`, a `OnceCell` provides simple `&`
+    /// Unlike `:td::cell::RefCell`, a `OnceCell` provides simple `&`
     /// references to the contents.
     ///
     /// # Example
@@ -218,7 +234,13 @@ pub mod unsync {
         inner: UnsafeCell<Option<T>>,
     }
 
+    // Similarly to a `Sync` bound on `sync::OnceCell`, we can use
+    // `&unsync::OnceCell` to sneak a `T` through `catch_unwind`,
+    // by initializing the cell in closure and extracting the value in the
+    // `Drop`.
+    #[cfg(feature = "std")]
     impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+    #[cfg(feature = "std")]
     impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
     impl<T> Default for OnceCell<T> {
@@ -255,6 +277,8 @@ pub mod unsync {
         }
     }
 
+    impl<T: Eq> Eq for OnceCell<T> {}
+
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
             OnceCell { inner: UnsafeCell::new(Some(value)) }
@@ -267,15 +291,17 @@ pub mod unsync {
             OnceCell { inner: UnsafeCell::new(None) }
         }
 
-        /// Gets the reference to the underlying value. Returns `None`
-        /// if the cell is empty.
+        /// Gets the reference to the underlying value.
+        ///
+        /// Returns `None` if the cell is empty.
         pub fn get(&self) -> Option<&T> {
             // Safe due to `inner`'s invariant
             unsafe { &*self.inner.get() }.as_ref()
         }
 
-        /// Sets the contents of this cell to `value`. Returns
-        /// `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// Sets the contents of this cell to `value`.
+        ///
+        /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
         /// full.
         ///
         /// # Example
@@ -373,8 +399,9 @@ pub mod unsync {
             Ok(self.get().unwrap())
         }
 
-        /// Consumes the `OnceCell`, returning the wrapped value. Returns
-        /// `None` if the cell was empty.
+        /// Consumes the `OnceCell`, returning the wrapped value.
+        ///
+        /// Returns `None` if the cell was empty.
         ///
         /// # Examples
         ///
@@ -426,7 +453,6 @@ pub mod unsync {
         ///
         /// # Example
         /// ```
-        /// # extern crate once_cell;
         /// # fn main() {
         /// use once_cell::unsync::Lazy;
         ///
@@ -443,9 +469,10 @@ pub mod unsync {
     }
 
     impl<T, F: FnOnce() -> T> Lazy<T, F> {
-        /// Forces the evaluation of this lazy value and
-        /// returns a reference to result. This is equivalent
-        /// to the `Deref` impl, but is explicit.
+        /// Forces the evaluation of this lazy value and returns a reference to
+        /// the result.
+        ///
+        /// This is equivalent to the `Deref` impl, but is explicit.
         ///
         /// # Example
         /// ```
@@ -476,14 +503,16 @@ pub mod unsync {
     }
 }
 
+#[cfg(feature = "std")]
 pub mod sync {
+    use std::{cell::UnsafeCell, fmt, hint::unreachable_unchecked};
+
     use crate::imp::OnceCell as Imp;
-    use std::{fmt, cell::UnsafeCell, hint::unreachable_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///
-    /// Unlike `::std::sync::Mutex`, a `OnceCell` provides simple `&`
-    /// references to the contents.
+    /// Unlike `std::sync::Mutex`, a `OnceCell` provides simple `&` references
+    /// to the contents.
     ///
     /// # Example
     /// ```
@@ -547,21 +576,25 @@ pub mod sync {
         }
     }
 
+    impl<T: Eq> Eq for OnceCell<T> {}
+
     impl<T> OnceCell<T> {
         /// Creates a new empty cell.
         pub const fn new() -> OnceCell<T> {
             OnceCell(Imp::new())
         }
 
-        /// Gets the reference to the underlying value. Returns `None`
-        /// if the cell is empty, or being initialized. This method does
-        /// not block.
+        /// Gets the reference to the underlying value.
+        ///
+        /// Returns `None` if the cell is empty, or being initialized. This
+        /// method never blocks.
         pub fn get(&self) -> Option<&T> {
             self.0.get()
         }
 
-        /// Sets the contents of this cell to `value`. Returns
-        /// `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// Sets the contents of this cell to `value`.
+        ///
+        /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
         /// full.
         ///
         /// # Example
@@ -590,19 +623,21 @@ pub mod sync {
             }
         }
 
-        /// Gets the contents of the cell, initializing it with `f`
-        /// if the cell was empty. May threads may call `get_or_init`
-        /// concurrently with different initializing functions, but
-        /// it is guaranteed that only one function will be executed.
+        /// Gets the contents of the cell, initializing it with `f` if the cell
+        /// was empty.
+        ///
+        /// Many threads may call `get_or_init` concurrently with different
+        /// initializing functions, but it is guaranteed that only one function
+        /// will be executed.
         ///
         /// # Panics
         ///
-        /// If `f` panics, the panic is propagated to the caller, and
-        /// the cell remains uninitialized.
+        /// If `f` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
         ///
-        /// It is an error to reentrantly initialize the cell from `f`.
-        /// The exact outcome is unspecified. Current implementation
-        /// deadlocks, but this may be changed to a panic in the future.
+        /// It is an error to reentrantly initialize the cell from `f`. The
+        /// exact outcome is unspecified. Current implementation deadlocks, but
+        /// this may be changed to a panic in the future.
         ///
         /// # Example
         /// ```
@@ -684,9 +719,8 @@ pub mod sync {
     ///
     /// # Example
     /// ```
-    /// extern crate once_cell;
-    ///
     /// use std::collections::HashMap;
+    ///
     /// use once_cell::sync::Lazy;
     ///
     /// static HASHMAP: Lazy<HashMap<i32, String>> = Lazy::new(|| {
@@ -726,9 +760,9 @@ pub mod sync {
     // to not impl `Sync` for `F`
     // we do create a `&mut Option<F>` in `force`, but this is
     // properly synchronized, so it only happens once
-    // so it also does not contribute to this impl
-    // We do create a `&T` from `&Lazy<T, F>`, so `T` needs `Sync`
-    unsafe impl<T: Sync, F: Send> Sync for Lazy<T, F> {}
+    // so it also does not contribute to this impl.
+    unsafe impl<T, F: Send> Sync for Lazy<T, F> where OnceCell<T>: Sync {}
+    // auto-derived `Send` impl is OK.
 
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
@@ -770,4 +804,21 @@ pub mod sync {
             Lazy::force(self)
         }
     }
+
+    /// ```compile_fail
+    /// struct S(*mut ());
+    /// unsafe impl Sync for S {}
+    ///
+    /// fn share<T: Sync>(_: &T) {}
+    /// share(&once_cell::sync::OnceCell::<S>::new());
+    /// ```
+    ///
+    /// ```compile_fail
+    /// struct S(*mut ());
+    /// unsafe impl Sync for S {}
+    ///
+    /// fn share<T: Sync>(_: &T) {}
+    /// share(&once_cell::sync::Lazy::<S>::new(|| unimplemented!()));
+    /// ```
+    fn _dummy() {}
 }

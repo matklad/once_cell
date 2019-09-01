@@ -1,7 +1,7 @@
 extern crate once_cell;
 
-use std::collections::HashMap;
 use once_cell::sync::{Lazy, OnceCell};
+use std::collections::HashMap;
 
 static HASHMAP: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();

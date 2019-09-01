@@ -1,11 +1,19 @@
 # Changelog
 
+## 1.0.0
+
+- remove `parking_lot` from the list of default features.
+- add `std` default feature. Without `std`, only `unsync` module is supported.
+- implement `Eq` for `OnceCell`.
+- fix wrong `Sync` bound on `sync::Lazy`.
+- run the whole test suite with miri.
+
 ## 0.2.7
 
 - New implementation of `sync::OnceCell` if `parking_lot` feature is disabled.
   It now employs a hand-rolled variant of `std::sync::Once`.
 - `sync::OnceCell::get_or_try_init` works without `parking_lot` as well!
-- document the effects of `parking_lot` feature: same performance but smaller types. 
+- document the effects of `parking_lot` feature: same performance but smaller types.
 
 ## 0.2.6
 

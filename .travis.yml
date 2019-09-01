@@ -18,11 +18,17 @@ matrix:
   include:
   - rust: stable
     script:
-    - cargo test --no-default-features
-    - cargo test --no-default-features --release
+    - cargo test --no-default-features --features std
+    - cargo test --no-default-features --features std --release
+
+  - rust: stable
+    script:
+    - cargo build --no-default-features --test test
+
   - rust: 1.31.1
     script:
     - mv Cargo.lock.min Cargo.lock
     - cargo build
-  - script: "cd ./miri-tests && ./test.sh"
-    
+  - script:
+    - rm -rf ./target
+    - ./run-miri-tests.sh
