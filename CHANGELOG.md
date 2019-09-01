@@ -4,6 +4,8 @@
 
 - fix unsoundness in `Lazy<T>` if the initializing function panics. Thanks [@xfix](https://github.com/xfix)!
 - implement `RefUnwindSafe` for `Lazy`.
+- share more code between `std` and `parking_lot` implementations.
+- add F.A.Q section to the docs.
 
 ## 1.0.0
 
