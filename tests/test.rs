@@ -115,43 +115,24 @@ mod unsync {
 
 #[cfg(feature = "std")]
 mod sync {
-    use std::{
-        mem, thread, ptr,
-        sync::atomic::{AtomicUsize, Ordering::SeqCst},
-    };
+    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
+    #[cfg(not(miri))] // miri doesn't support threads
     use crossbeam_utils::thread::scope;
 
     use once_cell::sync::{OnceCell, Lazy};
-
-    /// Runs `f` in a separate thread and waits for thread to finish.
-    /// `f` can borrow stack data.
-    /// This is unsound, but ok for tests
-    #[cfg(not(miri))] // miri doesn't support threads
-    fn go<F: FnOnce() -> ()>(mut f: F) {
-        struct Yolo<T>(T);
-        unsafe impl<T> Send for Yolo<T> {}
-
-        let ptr: *const u8 = &mut f as *const F as *const u8;
-        mem::forget(f);
-        let yolo = Yolo(ptr);
-        thread::spawn(move || {
-            let f: F = unsafe { ptr::read(yolo.0 as *const F) };
-            f();
-        })
-        .join()
-        .unwrap();
-    }
 
     #[test]
     #[cfg(not(miri))] // miri doesn't support threads
     fn once_cell() {
         let c = OnceCell::new();
         assert!(c.get().is_none());
-        go(|| {
-            c.get_or_init(|| 92);
-            assert_eq!(c.get(), Some(&92));
-        });
+        scope(|s| {
+            s.spawn(|_| {
+                c.get_or_init(|| 92);
+                assert_eq!(c.get(), Some(&92));
+            });
+        }).unwrap();
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
     }
@@ -168,11 +149,13 @@ mod sync {
         }
 
         let x = OnceCell::new();
-        go(|| {
-            x.get_or_init(|| Dropper);
-            assert_eq!(DROP_CNT.load(SeqCst), 0);
-            drop(x);
-        });
+        scope(|s| {
+            s.spawn(|_| {
+                x.get_or_init(|| Dropper);
+                assert_eq!(DROP_CNT.load(SeqCst), 0);
+                drop(x);
+            });
+        }).unwrap();
         assert_eq!(DROP_CNT.load(SeqCst), 1);
     }
 
@@ -293,11 +276,13 @@ mod sync {
 
         assert_eq!(called.load(SeqCst), 0);
 
-        go(|| {
-            let y = *x - 30;
-            assert_eq!(y, 62);
-            assert_eq!(called.load(SeqCst), 1);
-        });
+        scope(|s| {
+            s.spawn(|_| {
+                let y = *x - 30;
+                assert_eq!(y, 62);
+                assert_eq!(called.load(SeqCst), 1);
+            });
+        }).unwrap();
 
         let y = *x - 30;
         assert_eq!(y, 62);
@@ -314,9 +299,11 @@ mod sync {
             xs.push(3);
             xs
         });
-        go(|| {
-            assert_eq!(&*XS, &vec![1, 2, 3]);
-        });
+        scope(|s| {
+            s.spawn(|_| {
+                assert_eq!(&*XS, &vec![1, 2, 3]);
+            });
+        }).unwrap();
         assert_eq!(&*XS, &vec![1, 2, 3]);
     }
 
