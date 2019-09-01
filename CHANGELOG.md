@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- fix unsoundness in `Lazy<T>` if the initializing function panics. Thanks [@xfix](https://github.com/xfix)!
+- implement `RefUnwindSafe` for `Lazy`.
+
 ## 1.0.0
 
 - remove `parking_lot` from the list of default features.
