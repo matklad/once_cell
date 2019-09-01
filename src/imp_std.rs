@@ -22,7 +22,7 @@ pub(crate) struct OnceCell<T> {
     // that far. It was stabilized in 1.36.0, so, if you are reading this and
     // it's higher than 1.46.0 outside, please send a PR! ;) (and to the same
     // for `Lazy`, while we are at it).
-    value: UnsafeCell<Option<T>>,
+    pub(crate) value: UnsafeCell<Option<T>>,
 }
 
 // Why do we need `T: Send`?
@@ -69,38 +69,28 @@ impl<T> OnceCell<T> {
         }
     }
 
-    pub(crate) fn into_inner(self) -> Option<T> {
-        // Because `into_inner` takes `self` by value, the compiler statically verifies
-        // that it is not currently borrowed. So it is safe to move out `Option<T>`.
-        self.value.into_inner()
+    /// Safety: synchronizes with store to value via Release/(Acquire|SeqCst).
+    #[inline]
+    pub(crate) fn is_initialized(&self) -> bool {
+        // An `Acquire` load is enough because that makes all the initialization
+        // operations visible to us, and, this being a fast path, weaker
+        // ordering helps with performance. This `Acquire` synchronizes with
+        // `SeqCst` operations on the slow path.
+        self.state.load(Ordering::Acquire) == COMPLETE
     }
 
-    pub(crate) fn get(&self) -> Option<&T> {
-        if self.is_completed() {
-            let slot: &Option<T> = unsafe { &*self.value.get() };
-            match slot {
-                Some(value) => Some(value),
-                // This unsafe does improve performance, see `examples/bench`.
-                None => unsafe { std::hint::unreachable_unchecked() },
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
+    /// Safety: synchronizes with store to value via SeqCst read from state,
+    /// writes value only once because we never get to INCOMPLETE state after a
+    /// successful write.
+    #[cold]
+    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
     where
         F: FnOnce() -> Result<T, E>,
     {
-        // Fast path check
-        if let Some(value) = self.get() {
-            return Ok(value);
-        }
-
         let mut f = Some(f);
-        let mut err: Option<E> = None;
+        let mut res: Result<(), E> = Ok(());
         let slot = &self.value;
-        get_or_try_init_inner(&self.state, &mut || {
+        initialize_inner(&self.state, &mut || {
             let f = f.take().unwrap();
             match f() {
                 Ok(value) => {
@@ -108,33 +98,17 @@ impl<T> OnceCell<T> {
                     true
                 }
                 Err(e) => {
-                    err = Some(e);
+                    res = Err(e);
                     false
                 }
             }
         });
-        match err {
-            Some(err) => Err(err),
-            None => {
-                let value: &T = unsafe { &*slot.get() }.as_ref().unwrap();
-                Ok(value)
-            }
-        }
-    }
-
-    #[inline]
-    fn is_completed(&self) -> bool {
-        // An `Acquire` load is enough because that makes all the initialization
-        // operations visible to us, and, this being a fast path, weaker
-        // ordering helps with performance. This `Acquire` synchronizes with
-        // `SeqCst` operations on the slow path.
-        self.state.load(Ordering::Acquire) == COMPLETE
+        res
     }
 }
 
 // Note: this is intentionally monomorphic
-#[cold]
-fn get_or_try_init_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
+fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
     // This cold path uses SeqCst consistently because the
     // performance difference really does not matter there, and
     // SeqCst minimizes the chances of something going wrong.
@@ -163,6 +137,7 @@ fn get_or_try_init_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool)
                 // case.
                 let mut complete = Finish { failed: true, my_state };
                 let success = init();
+                // Difference from std: abort if `init` errored.
                 complete.failed = !success;
                 return success;
             }
@@ -209,6 +184,7 @@ impl Drop for Finish<'_> {
         // Swap out our state with however we finished. We should only ever see
         // an old state which was RUNNING.
         let queue = if self.failed {
+            // Difference from std: flip back to INCOMPLETE rather than POISONED.
             self.my_state.swap(INCOMPLETE, Ordering::SeqCst)
         } else {
             self.my_state.swap(COMPLETE, Ordering::SeqCst)
@@ -244,7 +220,7 @@ mod tests {
     impl<T> OnceCell<T> {
         fn init(&self, f: impl FnOnce() -> T) {
             enum Void {}
-            let _ = self.get_or_try_init(|| Ok::<T, Void>(f()));
+            let _ = self.initialize(|| Ok::<T, Void>(f()));
         }
     }
 

@@ -496,11 +496,9 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| {
-                match this.init.take() {
-                    Some(f) => f(),
-                    None => panic!("Lazy instance has previously been poisoned"),
-                }
+            this.cell.get_or_init(|| match this.init.take() {
+                Some(f) => f(),
+                None => panic!("Lazy instance has previously been poisoned"),
             })
         }
     }
@@ -515,7 +513,7 @@ pub mod unsync {
 
 #[cfg(feature = "std")]
 pub mod sync {
-    use std::{cell::Cell, fmt, panic::RefUnwindSafe};
+    use std::{cell::Cell, fmt, hint::unreachable_unchecked, panic::RefUnwindSafe};
 
     use crate::imp::OnceCell as Imp;
 
@@ -599,7 +597,28 @@ pub mod sync {
         /// Returns `None` if the cell is empty, or being initialized. This
         /// method never blocks.
         pub fn get(&self) -> Option<&T> {
-            self.0.get()
+            if self.0.is_initialized() {
+                // Safe b/c checked is_initialize
+                Some(unsafe { self.get_unchecked() })
+            } else {
+                None
+            }
+        }
+
+        /// Safety to call if guarded by `initialize`, `is_initialized`
+        ///
+        /// Implementations of those functions in `imp` must provide proper
+        /// synchronization and write-once property
+        unsafe fn get_unchecked(&self) -> &T {
+            let slot: &Option<T> = &*self.0.value.get();
+            match slot {
+                Some(value) => value,
+                // This unsafe does improve performance, see `examples/bench`.
+                None => {
+                    debug_assert!(false);
+                    unreachable_unchecked()
+                }
+            }
         }
 
         /// Sets the contents of this cell to `value`.
@@ -700,7 +719,15 @@ pub mod sync {
         where
             F: FnOnce() -> Result<T, E>,
         {
-            self.0.get_or_try_init(f)
+            // Fast path check
+            if let Some(value) = self.get() {
+                return Ok(value);
+            }
+            self.0.initialize(f)?;
+
+            // Safe b/c called initialize
+            debug_assert!(self.0.is_initialized());
+            Ok(unsafe { self.get_unchecked() })
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
@@ -719,7 +746,9 @@ pub mod sync {
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
         pub fn into_inner(self) -> Option<T> {
-            self.0.into_inner()
+            // Because `into_inner` takes `self` by value, the compiler statically verifies
+            // that it is not currently borrowed. So it is safe to move out `Option<T>`.
+            self.0.value.into_inner()
         }
     }
 
@@ -800,11 +829,9 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| {
-                match this.init.take() {
-                    Some(f) => f(),
-                    None => panic!("Lazy instance has previously been poisoned"),
-                }
+            this.cell.get_or_init(|| match this.init.take() {
+                Some(f) => f(),
+                None => panic!("Lazy instance has previously been poisoned"),
             })
         }
     }
