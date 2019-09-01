@@ -103,11 +103,10 @@ mod unsync {
     }
 }
 
-#[cfg(features = "std")]
+#[cfg(feature = "std")]
 mod sync {
     use std::{
         mem, thread, ptr,
-        cell::Cell,
         sync::atomic::{AtomicUsize, Ordering::SeqCst},
         sync::Barrier,
     };
@@ -183,7 +182,7 @@ mod sync {
 
     #[test]
     fn get_or_try_init() {
-        let cell: sync::OnceCell<String> = OnceCell::new();
+        let cell: OnceCell<String> = OnceCell::new();
         assert!(cell.get().is_none());
 
         let res =
@@ -219,7 +218,7 @@ mod sync {
     fn into_inner() {
         let cell: OnceCell<String> = OnceCell::new();
         assert_eq!(cell.into_inner(), None);
-        let cell = sync::OnceCell::new();
+        let cell = OnceCell::new();
         cell.set("hello".to_string()).unwrap();
         assert_eq!(cell.into_inner(), Some("hello".to_string()));
     }
@@ -238,16 +237,6 @@ mod sync {
     ],
 )"#
         );
-    }
-
-    #[test]
-    #[should_panic]
-    fn reentrant_init() {
-        let cell = OnceCell::<u32>::new();
-        cell.get_or_init(|| {
-            cell.get_or_init(|| 1);
-            2
-        });
     }
 
     #[test]
@@ -342,7 +331,7 @@ mod sync {
             (|| -> $ty:ty {
                 $($body:tt)*
             }) => {{
-                static ONCE_CELL: OnceCell<$ty> = sync::OnceCell::new();
+                static ONCE_CELL: OnceCell<$ty> = OnceCell::new();
                 fn init() -> $ty {
                     $($body)*
                 }
