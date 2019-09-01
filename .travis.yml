@@ -29,4 +29,4 @@ matrix:
     script:
     - mv Cargo.lock.min Cargo.lock
     - cargo build
-  - script: "cd ./miri-tests && ./test.sh"
+  - script: "./run-miri-tests.sh"

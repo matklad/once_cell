@@ -235,7 +235,10 @@ impl Drop for Finish<'_> {
 // These test are snatched from std as well.
 #[cfg(test)]
 mod tests {
-    use std::{panic, sync::mpsc::channel, thread};
+    use std::panic;
+    #[cfg(not(miri))] // miri doesn't support threads
+    use std::{thread, sync::mpsc::channel};
+
     use super::OnceCell;
 
     impl<T> OnceCell<T> {
@@ -256,7 +259,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn stampede_once() {
+
         static O: OnceCell<()> = OnceCell::new();
         static mut RUN: bool = false;
 
@@ -292,6 +297,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support panics
     fn poison_bad() {
         static O: OnceCell<()> = OnceCell::new();
 
@@ -313,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support panics
     fn wait_for_force_to_finish() {
         static O: OnceCell<()> = OnceCell::new();
 

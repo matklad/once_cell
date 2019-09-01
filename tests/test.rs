@@ -101,6 +101,16 @@ mod unsync {
         assert_eq!(y, 62);
         assert_eq!(called.get(), 1);
     }
+
+    #[test]
+    fn aliasing_in_get() {
+        let x = once_cell::unsync::OnceCell::new();
+        x.set(42).unwrap();
+        let at_x = x.get().unwrap(); // --- (shared) borrow of inner `Option<T>` --+
+        let _ = x.set(27); // <-- temporary (unique) borrow of inner `Option<T>`   |
+        println!("{}", at_x); // <------- up until here ---------------------------+
+    }
+
 }
 
 #[cfg(feature = "std")]
@@ -108,7 +118,6 @@ mod sync {
     use std::{
         mem, thread, ptr,
         sync::atomic::{AtomicUsize, Ordering::SeqCst},
-        sync::Barrier,
     };
 
     use crossbeam_utils::thread::scope;
@@ -117,6 +126,8 @@ mod sync {
 
     /// Runs `f` in a separate thread and waits for thread to finish.
     /// `f` can borrow stack data.
+    /// This is unsound, but ok for tests
+    #[cfg(not(miri))] // miri doesn't support threads
     fn go<F: FnOnce() -> ()>(mut f: F) {
         struct Yolo<T>(T);
         unsafe impl<T> Send for Yolo<T> {}
@@ -133,6 +144,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn once_cell() {
         let c = OnceCell::new();
         assert!(c.get().is_none());
@@ -145,6 +157,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn once_cell_drop() {
         static DROP_CNT: AtomicUsize = AtomicUsize::new(0);
         struct Dropper;
@@ -181,6 +194,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support panics
     fn get_or_try_init() {
         let cell: OnceCell<String> = OnceCell::new();
         assert!(cell.get().is_none());
@@ -240,6 +254,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support processes
     fn reentrant_init() {
         let examples_dir = {
             let mut exe = std::env::current_exe().unwrap();
@@ -268,6 +283,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn lazy_new() {
         let called = AtomicUsize::new(0);
         let x = Lazy::new(|| {
@@ -289,6 +305,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn static_lazy() {
         static XS: Lazy<Vec<i32>> = Lazy::new(|| {
             let mut xs = Vec::new();
@@ -353,6 +370,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn once_cell_does_not_leak_partially_constructed_boxes() {
         let n_tries = 100;
         let n_readers = 10;
@@ -379,7 +397,10 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // miri doesn't support threads
     fn get_does_not_block() {
+        use std::sync::Barrier;
+
         let cell = OnceCell::new();
         let barrier = Barrier::new(2);
         scope(|scope| {
