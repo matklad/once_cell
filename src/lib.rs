@@ -206,7 +206,11 @@ mod imp;
 mod imp;
 
 pub mod unsync {
-    use core::{cell::UnsafeCell, fmt, hint::unreachable_unchecked, ops::Deref};
+    use core::{
+        cell::{Cell, UnsafeCell},
+        fmt,
+        ops::Deref,
+    };
 
     #[cfg(feature = "std")]
     use std::panic::{RefUnwindSafe, UnwindSafe};
@@ -442,10 +446,18 @@ pub mod unsync {
     /// //   92
     /// //   92
     /// ```
-    #[derive(Debug)]
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: UnsafeCell<Option<F>>,
+        init: Cell<Option<F>>,
+    }
+
+    #[cfg(feature = "std")]
+    impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
+
+    impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_struct("Lazy").field("cell", &self.cell).field("init", &"..").finish()
+        }
     }
 
     impl<T, F> Lazy<T, F> {
@@ -464,7 +476,7 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: UnsafeCell::new(Some(init)) }
+            Lazy { cell: OnceCell::new(), init: Cell::new(Some(init)) }
         }
     }
 
@@ -484,12 +496,10 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            // Safe because closure is guaranteed to be called at most once
-            // so we only call `F` once, this also guarantees no race conditions
-            this.cell.get_or_init(|| unsafe {
-                match (*this.init.get()).take() {
+            this.cell.get_or_init(|| {
+                match this.init.take() {
                     Some(f) => f(),
-                    None => unreachable_unchecked(),
+                    None => panic!("Lazy instance has previously been poisoned"),
                 }
             })
         }
@@ -505,7 +515,7 @@ pub mod unsync {
 
 #[cfg(feature = "std")]
 pub mod sync {
-    use std::{cell::UnsafeCell, fmt, hint::unreachable_unchecked};
+    use std::{cell::Cell, fmt, panic::RefUnwindSafe};
 
     use crate::imp::OnceCell as Imp;
 
@@ -747,7 +757,7 @@ pub mod sync {
     /// ```
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: UnsafeCell<Option<F>>,
+        init: Cell<Option<F>>,
     }
 
     impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
@@ -764,11 +774,14 @@ pub mod sync {
     unsafe impl<T, F: Send> Sync for Lazy<T, F> where OnceCell<T>: Sync {}
     // auto-derived `Send` impl is OK.
 
+    #[cfg(feature = "std")]
+    impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
+
     impl<T, F> Lazy<T, F> {
         /// Creates a new lazy value with the given initializing
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: UnsafeCell::new(Some(f)) }
+            Lazy { cell: OnceCell::new(), init: Cell::new(Some(f)) }
         }
     }
 
@@ -787,12 +800,10 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            // Safe because closure is guaranteed to be called at most once
-            // so we only call `F` once, this also guarantees no race conditions
-            this.cell.get_or_init(|| unsafe {
-                match (*this.init.get()).take() {
+            this.cell.get_or_init(|| {
+                match this.init.take() {
                     Some(f) => f(),
-                    None => unreachable_unchecked(),
+                    None => panic!("Lazy instance has previously been poisoned"),
                 }
             })
         }
