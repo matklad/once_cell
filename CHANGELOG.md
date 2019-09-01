@@ -6,6 +6,7 @@
 - add `std` default feature. Without `std`, only `unsync` module is supported.
 - implement `Eq` for `OnceCell`.
 - fix wrong `Sync` bound on `sync::Lazy`.
+- run the whole test suite with miri.
 
 ## 0.2.7
 
