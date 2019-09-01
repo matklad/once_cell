@@ -40,6 +40,10 @@ name = "bench"
 required-features = ["std"]
 
 [[example]]
+name = "bench_vs_lazy_static"
+required-features = ["std"]
+
+[[example]]
 name = "lazy_static"
 required-features = ["std"]
 
