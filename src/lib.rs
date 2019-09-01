@@ -17,6 +17,10 @@ Note that, like with `RefCell` and `Mutex`, the `set` method requires only a sha
 Because of the single assignment restriction `get` can return an `&T` instead of `Ref<T>`
 or `MutexGuard<T>`.
 
+The `sync` flavor is thread-safe (that is, implements [`Sync`]) trait, while the `unsync` one is not.
+
+[`Sync`]: https://doc.rust-lang.org/std/marker/trait.Sync.html
+
 # Patterns
 
 `OnceCell` might be useful for a variety of patterns.
@@ -184,6 +188,28 @@ is enabled by default. Performance is the same for both cases, but `parking_lot`
 is smaller by up to 16 bytes.
 
 This crate uses unsafe.
+
+# F.A.Q.
+
+**Should I use lazy_static or once_cell?**
+
+To the first approximation, `once_cell` is both more flexible and more convenient than `lazy_static`
+and should be preferred.
+
+Unlike `once_cell`, `lazy_static` supports spinlock-based implementation of blocking which works with
+`#![no_std]`.
+
+`lazy_static` has received significantly more real world testing, but `once_cell` is also a widely
+used crate.
+
+**Should I use sync or unsync flavor?**
+
+Because Rust compiler checks thread safety for you, it's impossible to accidentally use `unsync` where
+`sync` is required. So, use `unsync` in single-threaded code and `sync` in multi-threaded. It's easy
+to switch between the two if code becomes multi-threaded later.
+
+At the moment, `unsync` has an additional benefit that reentrant initialization causes a panic, which
+might be easier to debug than a deadlock.
 
 # Related crates
 
