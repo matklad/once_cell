@@ -309,6 +309,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // leaks memory
     fn static_lazy_via_fn() {
         fn xs() -> &'static Vec<i32> {
             static XS: OnceCell<Vec<i32>> = OnceCell::new();
@@ -331,6 +332,7 @@ mod sync {
     }
 
     #[test]
+    #[cfg(not(miri))] // leaks memory
     fn eval_once_macro() {
         macro_rules! eval_once {
             (|| -> $ty:ty {
