@@ -103,6 +103,31 @@ mod unsync {
     }
 
     #[test]
+    fn lazy_default() {
+        static CALLED: AtomicUsize = AtomicUsize::new(0);
+
+        struct Foo(u8);
+        impl Default for Foo {
+            fn default() -> Self {
+                CALLED.fetch_add(1, SeqCst);
+                Foo(42)
+            }
+        }
+
+        let lazy: Lazy<std::sync::Mutex<Foo>> = <_>::default();
+
+        assert_eq!(CALLED.load(SeqCst), 0);
+
+        assert_eq!(lazy.lock().unwrap().0, 42);
+        assert_eq!(CALLED.load(SeqCst), 1);
+
+        lazy.lock().unwrap().0 = 21;
+
+        assert_eq!(lazy.lock().unwrap().0, 21);
+        assert_eq!(CALLED.load(SeqCst), 1);
+    }
+
+    #[test]
     #[cfg(not(miri))] // miri doesn't support panics
     #[cfg(feature = "std")]
     fn lazy_poisoning() {
@@ -121,7 +146,6 @@ mod unsync {
         let _ = x.set(27); // <-- temporary (unique) borrow of inner `Option<T>`   |
         println!("{}", at_x); // <------- up until here ---------------------------+
     }
-
 }
 
 #[cfg(feature = "std")]
@@ -320,6 +344,31 @@ mod sync {
         let y = *x - 30;
         assert_eq!(y, 62);
         assert_eq!(called.load(SeqCst), 1);
+    }
+
+    #[test]
+    fn lazy_default() {
+        static CALLED: AtomicUsize = AtomicUsize::new(0);
+
+        struct Foo(u8);
+        impl Default for Foo {
+            fn default() -> Self {
+                CALLED.fetch_add(1, SeqCst);
+                Foo(42)
+            }
+        }
+
+        let lazy: Lazy<std::sync::Mutex<Foo>> = <_>::default();
+
+        assert_eq!(CALLED.load(SeqCst), 0);
+
+        assert_eq!(lazy.lock().unwrap().0, 42);
+        assert_eq!(CALLED.load(SeqCst), 1);
+
+        lazy.lock().unwrap().0 = 21;
+
+        assert_eq!(lazy.lock().unwrap().0, 21);
+        assert_eq!(CALLED.load(SeqCst), 1);
     }
 
     #[test]
