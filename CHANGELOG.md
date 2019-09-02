@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- actually add `#![no_std]` attribute if std feature is not enabled.
+
 ## 1.0.1
 
 - fix unsoundness in `Lazy<T>` if the initializing function panics. Thanks [@xfix](https://github.com/xfix)!

@@ -221,10 +221,7 @@ might be easier to debug than a deadlock.
 
 */
 
-#![no_std]
-
-#[cfg(feature = "std")]
-extern crate std;
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 #[cfg(feature = "parking_lot")]
