@@ -221,6 +221,8 @@ might be easier to debug than a deadlock.
 
 */
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[cfg(feature = "std")]
 #[cfg(feature = "parking_lot")]
 #[path = "imp_pl.rs"]
