@@ -331,6 +331,14 @@ pub mod unsync {
             unsafe { &*self.inner.get() }.as_ref()
         }
 
+        /// Gets the mutable reference to the underlying value.
+        ///
+        /// Returns `None` if the cell is empty.
+        pub fn get_mut(&mut self) -> Option<&mut T> {
+            // Safe because we have unique access
+            unsafe { &mut *self.inner.get() }.as_mut()
+        }
+
         /// Sets the contents of this cell to `value`.
         ///
         /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
@@ -631,6 +639,14 @@ pub mod sync {
             } else {
                 None
             }
+        }
+
+        /// Gets the mutable reference to the underlying value.
+        ///
+        /// Returns `None` if the cell is empty.
+        pub fn get_mut(&mut self) -> Option<&mut T> {
+            // Safe b/c we have a unique access.
+            unsafe { &mut *self.0.value.get() }.as_mut()
         }
 
         /// Safety to call if guarded by `initialize`, `is_initialized`
