@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- implement `Default` for `Lazy`: it creates an empty `Lazy<T>` which is initialized with `T::default` on first access.
+- add `OnceCell::get_mut`.
+
 ## 1.0.2
 
 - actually add `#![no_std]` attribute if std feature is not enabled.
