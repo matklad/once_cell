@@ -7,7 +7,7 @@ mod unsync {
     use once_cell::unsync::{Lazy, OnceCell};
 
     #[test]
-    fn unsync_once_cell() {
+    fn once_cell() {
         let c = OnceCell::new();
         assert!(c.get().is_none());
         c.get_or_init(|| 92);
@@ -15,6 +15,15 @@ mod unsync {
 
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
+    }
+
+    #[test]
+    fn once_cell_get_mut() {
+        let mut c = OnceCell::new();
+        assert!(c.get_mut().is_none());
+        c.set(90).unwrap();
+        *c.get_mut().unwrap() += 2;
+        assert_eq!(c.get_mut(), Some(&mut 92));
     }
 
     #[test]
@@ -192,6 +201,15 @@ mod sync {
         .unwrap();
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
+    }
+
+    #[test]
+    fn once_cell_get_mut() {
+        let mut c = OnceCell::new();
+        assert!(c.get_mut().is_none());
+        c.set(90).unwrap();
+        *c.get_mut().unwrap() += 2;
+        assert_eq!(c.get_mut(), Some(&mut 92));
     }
 
     #[test]
