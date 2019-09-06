@@ -537,6 +537,13 @@ pub mod unsync {
             Lazy::force(self)
         }
     }
+
+    impl<T: Default> Default for Lazy<T> {
+        /// Creates a new lazy value using `Default` as the initializing function.
+        fn default() -> Lazy<T> {
+            Lazy::new(T::default)
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -868,6 +875,13 @@ pub mod sync {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
+        }
+    }
+
+    impl<T: Default> Default for Lazy<T> {
+        /// Creates a new lazy value using `Default` as the initializing function.
+        fn default() -> Lazy<T> {
+            Lazy::new(T::default)
         }
     }
 
