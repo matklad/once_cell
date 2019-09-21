@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0
+
+- add `sync::OnceCell::get_unchecked`.
+
 ## 1.1.0
 
 - implement `Default` for `Lazy`: it creates an empty `Lazy<T>` which is initialized with `T::default` on first access.

@@ -656,11 +656,14 @@ pub mod sync {
             unsafe { &mut *self.0.value.get() }.as_mut()
         }
 
-        /// Safety to call if guarded by `initialize`, `is_initialized`
+        /// Get the reference to the underlying value, without checking if the
+        /// cell is initialized.
         ///
-        /// Implementations of those functions in `imp` must provide proper
-        /// synchronization and write-once property
-        unsafe fn get_unchecked(&self) -> &T {
+        /// Safety:
+        ///
+        /// Caller must ensure that the cell is in initialized state.
+        pub unsafe fn get_unchecked(&self) -> &T {
+            debug_assert!(self.0.is_initialized());
             let slot: &Option<T> = &*self.0.value.get();
             match slot {
                 Some(value) => value,
