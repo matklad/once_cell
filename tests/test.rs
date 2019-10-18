@@ -149,11 +149,25 @@ mod unsync {
 
     #[test]
     fn aliasing_in_get() {
-        let x = once_cell::unsync::OnceCell::new();
+        let x = OnceCell::new();
         x.set(42).unwrap();
         let at_x = x.get().unwrap(); // --- (shared) borrow of inner `Option<T>` --+
         let _ = x.set(27); // <-- temporary (unique) borrow of inner `Option<T>`   |
         println!("{}", at_x); // <------- up until here ---------------------------+
+    }
+
+    #[test]
+    #[should_panic(expected = "reentrant init")]
+    #[cfg(not(miri))] // https://github.com/rust-lang/miri/issues/658
+    fn reentrant_init() {
+        let x: OnceCell<Box<i32>> = OnceCell::new();
+        let dangling_ref: Cell<Option<&i32>> = Cell::new(None);
+        x.get_or_init(|| {
+            let r = x.get_or_init(|| Box::new(92));
+            dangling_ref.set(Some(r));
+            Box::new(62)
+        });
+        eprintln!("use after free: {:?}", dangling_ref.get().unwrap());
     }
 }
 
