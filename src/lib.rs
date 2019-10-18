@@ -373,13 +373,13 @@ pub mod unsync {
         /// Gets the contents of the cell, initializing it with `f`
         /// if the cell was empty.
         ///
+        /// While probably an error, it is possible to reentrantly initialize
+        /// the cell from `f`.
+        ///
         /// # Panics
         ///
         /// If `f` panics, the panic is propagated to the caller, and the cell
         /// remains uninitialized.
-        ///
-        /// It is an error to reentrantly initialize the cell from `f`. Doing
-        /// so results in a panic.
         ///
         /// # Example
         /// ```
@@ -406,13 +406,13 @@ pub mod unsync {
         /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
         ///
+        /// While probably an error, it is possible to reentrantly initialize
+        /// the cell from `f`.
+        ///
         /// # Panics
         ///
         /// If `f` panics, the panic is propagated to the caller, and the cell
         /// remains uninitialized.
-        ///
-        /// It is an error to reentrantly initialize the cell from `f`. Doing
-        /// so results in a panic.
         ///
         /// # Example
         /// ```
@@ -434,8 +434,17 @@ pub mod unsync {
             if let Some(val) = self.get() {
                 return Ok(val);
             }
+            // Because the slot is currently `None`, we know there exists no
+            // other references to the contents of the cell.
             let val = f()?;
-            assert!(self.set(val).is_ok(), "reentrant init");
+            // It is not strictly neccesary to detect re-entrant initialization
+            // here: outside of the initializer a double write to the
+            // `OnceCell` can not be observed, and no aliasing guarantees are
+            // violated.
+            {
+                let slot = unsafe { &mut *self.inner.get() };
+                *slot = Some(val);
+            }
             Ok(self.get().unwrap())
         }
 
