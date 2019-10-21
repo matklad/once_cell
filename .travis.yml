@@ -25,8 +25,8 @@ matrix:
 
   - rust: stable
     script:
-    - cargo test --no-default-features --features std
-    - cargo test --no-default-features --features std --release
+    - cargo test --no-default-features --features "std parking_lot"
+    - cargo test --no-default-features --features "std parking_lot" --release
 
   - rust: stable
     script:
