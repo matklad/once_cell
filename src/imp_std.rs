@@ -330,4 +330,12 @@ mod tests {
         assert!(t1.join().is_ok());
         assert!(t2.join().is_ok());
     }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn test_size() {
+        use std::mem::size_of;
+
+        assert_eq!(size_of::<OnceCell<u32>>(), 4 * size_of::<u32>());
+    }
 }
