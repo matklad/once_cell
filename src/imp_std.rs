@@ -330,4 +330,14 @@ mod tests {
         assert!(t1.join().is_ok());
         assert!(t2.join().is_ok());
     }
+
+    #[test]
+    fn test_size() {
+        use std::mem::size_of;
+        use std::num::NonZeroUsize;
+
+        // FIXME: test with `usize` instead of `NonZeroUsize` after the switch to use
+        // `std::mem::MaybeUninit`.
+        assert_eq!(size_of::<OnceCell<NonZeroUsize>>(), 2 * size_of::<usize>());
+    }
 }
