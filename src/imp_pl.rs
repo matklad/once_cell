@@ -9,6 +9,10 @@ use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
     is_initialized: AtomicBool,
+    // FIXME: switch to `std::mem::MaybeUninit` once we are ready to bump MSRV
+    // that far. It was stabilized in 1.36.0, so, if you are reading this and
+    // it's higher than 1.46.0 outside, please send a PR! ;) (and to the same
+    // for `Lazy`, while we are at it).
     pub(crate) value: UnsafeCell<Option<T>>,
 }
 
