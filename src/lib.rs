@@ -223,15 +223,15 @@ might be easier to debug than a deadlock.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[cfg(feature = "parking_lot")]
-#[path = "imp_pl.rs"]
-mod imp;
+#[cfg(all(feature = "std", feature = "parking_lot"))]
+mod imp_pl;
+#[cfg(all(feature = "std", feature = "parking_lot"))]
+use imp_pl as imp;
 
-#[cfg(feature = "std")]
-#[cfg(not(feature = "parking_lot"))]
-#[path = "imp_std.rs"]
-mod imp;
+#[cfg(all(feature = "std", not(feature = "parking_lot")))]
+mod imp_std;
+#[cfg(all(feature = "std", not(feature = "parking_lot")))]
+use imp_std as imp;
 
 pub mod unsync {
     use core::{
