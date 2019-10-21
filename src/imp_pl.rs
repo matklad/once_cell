@@ -96,9 +96,15 @@ impl Drop for MutexGuard<'_> {
 }
 
 #[test]
-#[cfg(pointer_width = "64")]
+#[ignore]
+// Size depends on the size of `parking_lot::lock_api::RawMutex`, which depends on the compiler
+// version. With Rust >= 1.34 `RawMutex` is 1 byte, otherwise pointer sized.
+// FIXME: re-enable once the MSVR is >= 1.34
 fn test_size() {
     use std::mem::size_of;
+    use std::num::NonZeroU32;
 
-    assert_eq!(size_of::<OnceCell<u32>>, 2 * size_of::<u32>);
+    // FIXME: test with `u32` instead of `NonZeroU32` after the switch to use
+    // `std::mem::MaybeUninit`.
+    assert_eq!(size_of::<OnceCell<NonZeroU32>>(), 8);
 }
