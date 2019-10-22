@@ -124,8 +124,8 @@ impl<T> OnceCell<T> {
 // Representation of a node in the linked list of waiters.
 struct Waiter {
     thread: Option<Thread>,
-    signaled: AtomicBool, // Only used for signaling, not for to synchronising data,
-                          // so can always be used with `Ordering::Relaxed`.
+    signaled: AtomicBool, // Needs Release and Acquire orderings, because the thread that manages
+                          // the `WaiterQueue` reaches inside to take out `thread`.
     next: *mut Waiter,
     // Note: we have to use a raw pointer for `next`. There is an instant right after setting
     // `signaled` where the next thread may free its `Waiter`, while we still hold a live reference.
@@ -180,7 +180,7 @@ fn wait(state_and_queue: &AtomicUsize, current_state: usize) {
 
     // We have enqueued ourselves, now lets wait.
     // Guard against spurious wakeups by reparking ourselves until we are signaled.
-    while !node.signaled.load(Ordering::Relaxed) {
+    while !node.signaled.load(Ordering::Acquire) {
         thread::park();
     }
 }
@@ -204,7 +204,7 @@ impl Drop for WaiterQueue<'_> {
             while !queue.is_null() {
                 let next = (*queue).next;
                 let thread = (*queue).thread.take().unwrap();
-                (*queue).signaled.store(true, Ordering::Relaxed);
+                (*queue).signaled.store(true, Ordering::Release);
                 // Here is the reason for using a raw pointer for `next`: at this point we have
                 // signaled the other thread and the node may have been freed, while we still hold a
                 // live reference (even though we do not use the reference anymore).
