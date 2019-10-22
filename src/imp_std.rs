@@ -72,51 +72,75 @@ impl<T> OnceCell<T> {
         self.state_and_queue.load(Ordering::Acquire) == COMPLETE
     }
 
+    /// Safety: synchronizes with store to value via Release/Acquire.
+    /// Writes value only once because we never get to INCOMPLETE state after a
+    /// successful write.
     #[cold]
     pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
     where
         F: FnOnce() -> Result<T, E>,
     {
-        // Note on atomic orderings of `self.status`:
-        // - The only data that has to be synchronised across threads is `self.value`.
-        // - The only store that needs `Release` is after the data is written and `status` is set to
-        //   COMPLETE (in the destructor of `wake_waiters_on_drop`).
-        //   All other stores can be `Relaxed`.
-        // - At the end of this `initialize` function we have to guarantee the data is acquired.
-        //   Every load that can lead to the end of this function must have `Acquire` ordering.
-        let mut state_and_queue = self.state_and_queue.load(Ordering::Acquire);
-        loop {
-            match state_and_queue {
-                COMPLETE => break,
-                EMPTY => {
-                    // Try to register this thread as the one doing initialization (RUNNING).
-                    let old = self.state_and_queue.compare_and_swap(EMPTY,
-                                                                    RUNNING,
-                                                                    Ordering::Acquire);
-                    if old != EMPTY {
-                        state_and_queue = old;
-                        continue;
-                    }
-                    // The destructor of `wake_waiters_on_drop` will do cleanup here.
-                    // It will wake up other threads that may have waited on us.
-                    // If the closure panics or returns Err it will reset `state_and_queue` to
-                    // EMPTY, otherwise to COMPLETED.
-                    let mut wake_waiters_on_drop = WaiterQueue::new(&self.state_and_queue);
-                    // Run the initialization closure.
-                    let value = f()?;
-                    let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
-                    debug_assert!(slot.is_none());
-                    *slot = Some(value);
-                    wake_waiters_on_drop.completed = true;
-                    break;
+        // Create a new closure that executes `f`, and that can write its results directly into
+        // `self.value` and `res`. This way `initialize_inner` can be monomorphic.
+        // It should return a bool to indicate success or failure.
+        let mut f = Some(f);
+        let mut res: Result<(), E> = Ok(());
+        let slot = &self.value;
+        initialize_inner(&self.state_and_queue, &mut || {
+            let f = f.take().unwrap();
+            match f() {
+                Ok(value) => {
+                    unsafe { *slot.get() = Some(value) };
+                    true
                 }
-                _ => {
-                    wait(&self.state_and_queue, state_and_queue);
-                    state_and_queue = self.state_and_queue.load(Ordering::Acquire);
+                Err(e) => {
+                    res = Err(e);
+                    false
                 }
             }
+        });
+        res
+    }
+}
+
+// This function is intentionally monomorphic; it does not have to be compiled for each
+// subsitution of generic parameters of `OnceCell` in each crate. Using `&mut dyn FnOnce` instead
+// of `&mut FnOnce` helps with compile times and reduces unnecessary code bloat.
+fn initialize_inner(state: &AtomicUsize, init: &mut dyn FnMut() -> bool) {
+    // Note on atomic orderings of `self.status`:
+    // - The only data that has to be synchronised across threads is `self.value`.
+    // - The only store that needs `Release` is after the data is written and `status` is set to
+    //   COMPLETE (in the destructor of `wake_waiters_on_drop`).
+    //   All other stores can be `Relaxed`.
+    // - At the end of this `initialize` function we have to guarantee the data is acquired.
+    //   Every load that can lead to the end of this function must have `Acquire` ordering.
+    let mut state_and_queue = state.load(Ordering::Acquire);
+    loop {
+        match state_and_queue {
+            COMPLETE => break,
+            EMPTY => {
+                // Try to register this thread as the one doing initialization (RUNNING).
+                let old = state.compare_and_swap(EMPTY, RUNNING, Ordering::Acquire);
+                if old != EMPTY {
+                    state_and_queue = old;
+                    continue;
+                }
+                // The destructor of `wake_waiters_on_drop` will do cleanup here.
+                // It will wake up other threads that may have waited on us.
+                // If the function panics or returns `false` it will reset `state_and_queue` to
+                // EMPTY, otherwise to COMPLETED.
+                let mut wake_waiters_on_drop = WaiterQueue::new(state);
+                // Run the initialization function.
+                let success = init();
+                wake_waiters_on_drop.completed = success;
+                break
+            }
+            _ => { // All other values must be RUNNING with a pointer to the waiter queue in the
+                   // more significant bits.
+                wait(&state, state_and_queue);
+                state_and_queue = state.load(Ordering::Acquire);
+            }
         }
-        Ok(())
     }
 }
 
