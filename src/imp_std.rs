@@ -137,8 +137,7 @@ fn initialize_inner(state: &AtomicUsize, init: &mut dyn FnMut() -> bool) {
             }
             _ => { // All other values must be RUNNING with a pointer to the waiter queue in the
                    // more significant bits.
-                wait(&state, state_and_queue);
-                state_and_queue = state.load(Ordering::Acquire);
+                state_and_queue = wait(&state, state_and_queue);
             }
         }
     }
@@ -170,7 +169,7 @@ impl WaiterQueue<'_> {
     }
 }
 
-fn wait(state_and_queue: &AtomicUsize, current_state: usize) {
+fn wait(state_and_queue: &AtomicUsize, current_state: usize) -> usize {
     // Create the node for our current thread that we are going to try to slot in at the head of the
     // linked list.
     let mut node = Waiter {
@@ -188,7 +187,7 @@ fn wait(state_and_queue: &AtomicUsize, current_state: usize) {
     let mut old_head_and_status = current_state;
     loop {
         if old_head_and_status & STATE_MASK != RUNNING {
-            return; // No need anymore to enqueue ourselves.
+            return old_head_and_status; // No need anymore to enqueue ourselves.
         }
 
         node.next = (old_head_and_status & !STATE_MASK) as *mut Waiter;
@@ -203,8 +202,19 @@ fn wait(state_and_queue: &AtomicUsize, current_state: usize) {
 
     // We have enqueued ourselves, now lets wait.
     // Guard against spurious wakeups by reparking ourselves until we are signaled.
-    while !node.signaled.load(Ordering::Acquire) {
-        thread::park();
+    loop {
+        if !node.signaled.load(Ordering::Acquire) {
+            thread::park();
+        } else {
+            // We are dealing with two atomics here, `node.signaled` and `state_and_queue`.
+            // A load on `state_and_queue` can not simply be done after this loop: that would cause
+            // there to be no explicit relationship between the two atomics, which gives the
+            // compiler freedom to reorder the load to before the loop (and before parking).
+            //
+            // Instead we load `state_and_queue` in this else block after checking `node.signaled`,
+            // establishing an order.
+            return state_and_queue.load(Ordering::Acquire);
+        }
     }
 }
 
