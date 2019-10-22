@@ -9,7 +9,7 @@
 // Differences with `std::sync::Once`:
 //   * no poisoning
 //   * init function can fail
-//   * thread parking is factored of `initialize`
+//   * thread parking is factored out of `initialize`
 
 use std::{
     cell::UnsafeCell,
@@ -127,6 +127,8 @@ struct Waiter {
     signaled: AtomicBool, // Only used for signaling, not for to synchronising data,
                           // so can always be used with `Ordering::Relaxed`.
     next: *mut Waiter,
+    // Note: we have to use a raw pointer for `next`. There is an instant right after setting
+    // `signaled` where the next thread may free its `Waiter`, while we still hold a live reference.
 }
 
 // Head of a linked list of waiters.
@@ -194,16 +196,18 @@ impl Drop for WaiterQueue<'_> {
         // We should only ever see an old state which was RUNNING.
         assert_eq!(state_and_queue & STATE_MASK, RUNNING);
 
-        // Walk the entire linked list of waiters and wake them up.
-        // Note that it is crucial that after we store `true` in the node it can be free'd!
-        // (because of the possibility of spurious wakeups)
-        // That store must be the last action before unparking.
+        // Walk the entire linked list of waiters and wake them up (in lifo order).
+        // Note that storing `true` in `signaled` must be the last action (before unparking) because
+        // right after that the node can be freed if there happens to be a spurious wakeup.
         unsafe {
             let mut queue = (state_and_queue & !STATE_MASK) as *mut Waiter;
             while !queue.is_null() {
                 let next = (*queue).next;
                 let thread = (*queue).thread.take().unwrap();
                 (*queue).signaled.store(true, Ordering::Relaxed);
+                // Here is the reason for using a raw pointer for `next`: at this point we have
+                // signaled the other thread and the node may have been freed, while we still hold a
+                // live reference (even though we do not use the reference anymore).
                 thread.unpark();
                 queue = next;
             }
