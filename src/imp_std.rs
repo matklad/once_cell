@@ -55,7 +55,7 @@ struct Waiter {
 // Helper struct used to clean up after a closure call with a `Drop`
 // implementation to also run on panic.
 struct Finish<'a> {
-    failed: bool,
+    set_value_on_drop_to: isize,
     my_state: &'a AtomicIsize,
 }
 
@@ -133,10 +133,12 @@ fn initialize_inner(my_state: &AtomicIsize, init: &mut dyn FnMut() -> bool) -> b
             // the `Drop` implementation here is responsible for waking
             // up other waiters both in the normal return and panicking
             // case.
-            let mut complete = Finish { failed: true, my_state };
+            let mut complete = Finish { set_value_on_drop_to: EMPTY, my_state };
             let success = init();
             // Difference from std: abort if `init` errored.
-            complete.failed = !success;
+            if success {
+                complete.set_value_on_drop_to = 0;
+            }
             return success;
         } else {
             // All other values we find should correspond to the RUNNING
@@ -180,12 +182,7 @@ impl Drop for Finish<'_> {
     fn drop(&mut self) {
         // Swap out our state with however we finished. We should only ever see
         // an old state which was RUNNING.
-        let queue = if self.failed {
-            // Difference from std: flip back to EMPTY rather than POISONED.
-            self.my_state.swap(EMPTY, Ordering::SeqCst)
-        } else {
-            self.my_state.swap(0, Ordering::SeqCst)
-        };
+        let queue = self.my_state.swap(self.set_value_on_drop_to, Ordering::SeqCst);
         assert!(queue <= RUNNING);
 
         // Decode the RUNNING to a list of waiters, then walk that entire list

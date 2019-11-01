@@ -218,6 +218,30 @@ mod sync {
     }
 
     #[test]
+    fn once_cell_large_alignment() {
+        #[repr(align(32))]
+        #[derive(Debug, Eq, PartialEq)]
+        struct MyType(i32);
+
+        let c = OnceCell::new();
+        assert!(c.get().is_none());
+        c.get_or_init(|| MyType(92));
+        assert_eq!(c.get(), Some(&MyType(92)));
+    }
+
+    #[test]
+    fn once_cell_zst() {
+        #[repr(align(32))]
+        #[derive(Debug, Eq, PartialEq)]
+        struct MyType(());
+
+        let c = OnceCell::new();
+        assert!(c.get().is_none());
+        c.get_or_init(|| MyType(()));
+        assert_eq!(c.get(), Some(&MyType(())));
+    }
+
+    #[test]
     fn once_cell_get_mut() {
         let mut c = OnceCell::new();
         assert!(c.get_mut().is_none());
