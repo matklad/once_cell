@@ -20,7 +20,7 @@ pub(crate) struct OnceCell<T> {
     //       -1 EMPTY
     //       -2 RUNNING
     //     < -2 (encoded waiter pointer, -(waiterptr >> 1))
-    state: AtomicIsize,
+    pub(crate) state: AtomicIsize,
     _marker: PhantomData<*mut Waiter>,
     // FIXME: switch to `std::mem::MaybeUninit` once we are ready to bump MSRV
     // that far. It was stabilized in 1.36.0, so, if you are reading this and
@@ -68,28 +68,19 @@ impl<T> OnceCell<T> {
         }
     }
 
-    /// Safety: synchronizes with store to value via Release/(Acquire|SeqCst).
-    #[inline]
-    pub(crate) fn is_initialized(&self) -> bool {
-        // An `Acquire` load is enough because that makes all the initialization
-        // operations visible to us, and, this being a fast path, weaker
-        // ordering helps with performance. This `Acquire` synchronizes with
-        // `SeqCst` operations on the slow path.
-        self.state.load(Ordering::Acquire) >= 0
-    }
-
     /// Safety: synchronizes with store to value via SeqCst read from state,
     /// writes value only once because we never get to INCOMPLETE state after a
     /// successful write.
     #[cold]
-    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
+    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<isize, E>
     where
         F: FnOnce() -> Result<T, E>,
     {
         let mut f = Some(f);
         let mut res: Result<(), E> = Ok(());
         let slot = &self.value;
-        initialize_inner(&self.state, &mut || {
+        let offset = ((slot as *const _ as usize) - (self as *const _ as usize)) as isize;
+        let state = initialize_inner(&self.state, offset, &mut || {
             let f = f.take().unwrap();
             match f() {
                 Ok(value) => {
@@ -102,12 +93,13 @@ impl<T> OnceCell<T> {
                 }
             }
         });
-        res
+        res?;
+        Ok(state)
     }
 }
 
 // Note: this is intentionally monomorphic
-fn initialize_inner(my_state: &AtomicIsize, init: &mut dyn FnMut() -> bool) -> bool {
+fn initialize_inner(my_state: &AtomicIsize, offset: isize, init: &mut dyn FnMut() -> bool) -> isize {
     // This cold path uses SeqCst consistently because the
     // performance difference really does not matter there, and
     // SeqCst minimizes the chances of something going wrong.
@@ -117,7 +109,7 @@ fn initialize_inner(my_state: &AtomicIsize, init: &mut dyn FnMut() -> bool) -> b
         if state >= 0 {
             // If we're complete, then there's nothing to do, we just
             // jettison out as we shouldn't run the closure.
-            return true;
+            return state;
         } else if state == EMPTY {
             // Otherwise if we see an incomplete state we will attempt to
             // move ourselves into the RUNNING state. If we succeed, then
@@ -137,9 +129,9 @@ fn initialize_inner(my_state: &AtomicIsize, init: &mut dyn FnMut() -> bool) -> b
             let success = init();
             // Difference from std: abort if `init` errored.
             if success {
-                complete.set_value_on_drop_to = 0;
+                complete.set_value_on_drop_to = offset;
             }
-            return success;
+            return offset;
         } else {
             // All other values we find should correspond to the RUNNING
             // state with an encoded waiter list in the more significant

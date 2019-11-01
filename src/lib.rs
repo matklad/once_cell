@@ -560,7 +560,13 @@ pub mod unsync {
 
 #[cfg(feature = "std")]
 pub mod sync {
-    use std::{cell::Cell, fmt, hint::unreachable_unchecked, panic::RefUnwindSafe};
+    use std::{
+        cell::{Cell, UnsafeCell},
+        fmt,
+        hint::unreachable_unchecked,
+        panic::RefUnwindSafe,
+        sync::atomic::Ordering
+    };
 
     use crate::imp::OnceCell as Imp;
 
@@ -639,14 +645,29 @@ pub mod sync {
             OnceCell(Imp::new())
         }
 
+        #[inline]
+        // Safety: `offset` must be the correct offset to the `value` field.
+        unsafe fn consume(&self, offset: isize) -> &T {
+            let ptr = ((self as *const _ as usize) + offset as usize) as *const UnsafeCell<Option<T>>;
+            let slot: &Option<T> = &*(*ptr).get();
+            match slot {
+                Some(value) => value,
+                // This unsafe does improve performance, see `examples/bench`.
+                None => {
+                    debug_assert!(false);
+                    unreachable_unchecked()
+                }
+            }
+        }
+
         /// Gets the reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty, or being initialized. This
         /// method never blocks.
         pub fn get(&self) -> Option<&T> {
-            if self.0.is_initialized() {
-                // Safe b/c checked is_initialize
-                Some(unsafe { self.get_unchecked() })
+            let state = self.0.state.load(Ordering::Relaxed);
+            if state >= 0 {
+                unsafe { Some(self.consume(state)) }
             } else {
                 None
             }
@@ -656,7 +677,9 @@ pub mod sync {
         ///
         /// Returns `None` if the cell is empty.
         pub fn get_mut(&mut self) -> Option<&mut T> {
-            // Safe b/c we have a unique access.
+            // Safe because we have a unique access.
+            // We can read `value` directly, there is no way we can have unique access where `value`
+            // is not yet synchronized.
             unsafe { &mut *self.0.value.get() }.as_mut()
         }
 
@@ -668,7 +691,8 @@ pub mod sync {
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
         pub unsafe fn get_unchecked(&self) -> &T {
-            debug_assert!(self.0.is_initialized());
+            debug_assert!(self.0.state.load(Ordering::Relaxed) > 0);
+            // We read `value` directly, without using `consume` for synchronization.
             let slot: &Option<T> = &*self.0.value.get();
             match slot {
                 Some(value) => value,
@@ -782,11 +806,8 @@ pub mod sync {
             if let Some(value) = self.get() {
                 return Ok(value);
             }
-            self.0.initialize(f)?;
-
-            // Safe b/c called initialize
-            debug_assert!(self.0.is_initialized());
-            Ok(unsafe { self.get_unchecked() })
+            let offset = self.0.initialize(f)?;
+            unsafe { Ok(self.consume(offset)) }
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
