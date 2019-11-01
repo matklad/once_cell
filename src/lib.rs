@@ -665,7 +665,8 @@ pub mod sync {
         ///
         /// Safety:
         ///
-        /// Caller must ensure that the cell is in initialized state.
+        /// Caller must ensure that the cell is in initialized state, and that
+        /// the contents are acquired by (synchronized to) this thread.
         pub unsafe fn get_unchecked(&self) -> &T {
             debug_assert!(self.0.is_initialized());
             let slot: &Option<T> = &*self.0.value.get();
