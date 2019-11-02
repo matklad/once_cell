@@ -1,14 +1,14 @@
 use std::{
     cell::UnsafeCell,
     panic::{RefUnwindSafe, UnwindSafe},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicIsize, Ordering},
 };
 
 use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
-    is_initialized: AtomicBool,
+    pub(crate) state: AtomicIsize,
     pub(crate) value: UnsafeCell<Option<T>>,
 }
 
@@ -23,30 +23,27 @@ unsafe impl<T: Send> Send for OnceCell<T> {}
 impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
 impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
+const EMPTY: isize = -1;
+
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
             mutex: Mutex::new(),
-            is_initialized: AtomicBool::new(false),
+            state: AtomicIsize::new(EMPTY),
             value: UnsafeCell::new(None),
         }
     }
 
-    /// Safety: synchronizes with store to value via Release/Acquire.
-    #[inline]
-    pub(crate) fn is_initialized(&self) -> bool {
-        self.is_initialized.load(Ordering::Acquire)
-    }
-
-    /// Safety: synchronizes with store to value via `is_initialized` or mutex
+    /// Safety: synchronizes with store to value via `state` or mutex
     /// lock/unlock, writes value only once because of the mutex.
     #[cold]
-    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
+    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<isize, E>
     where
         F: FnOnce() -> Result<T, E>,
     {
         let _guard = self.mutex.lock();
-        if !self.is_initialized() {
+        let mut state = self.state.load(Ordering::Relaxed);
+        if state < 0 {
             // We are calling user-supplied function and need to be careful.
             // - if it returns Err, we unlock mutex and return without touching anything
             // - if it panics, we unlock mutex and propagate panic without touching anything
@@ -59,9 +56,11 @@ impl<T> OnceCell<T> {
             let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
             debug_assert!(slot.is_none());
             *slot = Some(value);
-            self.is_initialized.store(true, Ordering::Release);
+            let offset = ((slot as *const _ as usize) - (self as *const _ as usize)) as isize;
+            self.state.store(offset, Ordering::Release);
+            state = offset;
         }
-        Ok(())
+        Ok(state)
     }
 }
 
