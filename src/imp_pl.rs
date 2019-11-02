@@ -1,9 +1,9 @@
 use std::{
     cell::UnsafeCell,
-    mem::MaybeUninit,
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicBool, Ordering},
 };
+use crate::maybe_uninit::MaybeUninit;
 
 use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 
@@ -59,7 +59,8 @@ impl<T> OnceCell<T> {
             let value = f()?;
             unsafe {
                 let slot: &mut MaybeUninit<T> = &mut *self.value.get();
-                slot.as_mut_ptr().write(value);
+                // FIXME: replace with `slot.as_mut_ptr().write(value)`
+                slot.write(value);
             }
             self.is_initialized.store(true, Ordering::Release);
         }

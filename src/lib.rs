@@ -233,6 +233,8 @@ mod imp;
 #[path = "imp_std.rs"]
 mod imp;
 
+mod maybe_uninit;
+
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
@@ -570,12 +572,13 @@ pub mod sync {
     use std::{
         cell::{Cell, UnsafeCell},
         fmt,
-        mem::{self, ManuallyDrop, MaybeUninit},
+        mem::{self, ManuallyDrop},
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
 
     use crate::imp::OnceCell as Imp;
+    use crate::maybe_uninit::MaybeUninit;
 
     /// A thread-safe cell which can be written to only once.
     ///
