@@ -1,5 +1,6 @@
 use std::{
     cell::UnsafeCell,
+    mem::MaybeUninit,
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -9,7 +10,7 @@ use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
     is_initialized: AtomicBool,
-    pub(crate) value: UnsafeCell<Option<T>>,
+    pub(crate) value: UnsafeCell<MaybeUninit<T>>,
 }
 
 // Why do we need `T: Send`?
@@ -28,7 +29,7 @@ impl<T> OnceCell<T> {
         OnceCell {
             mutex: Mutex::new(),
             is_initialized: AtomicBool::new(false),
-            value: UnsafeCell::new(None),
+            value: UnsafeCell::new(MaybeUninit::uninit()),
         }
     }
 
@@ -56,9 +57,10 @@ impl<T> OnceCell<T> {
             // - finally, if it returns Ok, we store the value and store the flag with
             //   `Release`, which synchronizes with `Acquire`s.
             let value = f()?;
-            let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
-            debug_assert!(slot.is_none());
-            *slot = Some(value);
+            unsafe {
+                let slot: &mut MaybeUninit<T> = &mut *self.value.get();
+                slot.as_mut_ptr().write(value);
+            }
             self.is_initialized.store(true, Ordering::Release);
         }
         Ok(())
