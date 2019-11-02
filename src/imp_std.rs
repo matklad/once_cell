@@ -103,7 +103,7 @@ fn initialize_inner(my_state: &AtomicIsize, offset: isize, init: &mut dyn FnMut(
     // This cold path uses SeqCst consistently because the
     // performance difference really does not matter there, and
     // SeqCst minimizes the chances of something going wrong.
-    let mut state = my_state.load(Ordering::SeqCst);
+    let mut state = my_state.load(Ordering::Relaxed);
 
     'outer: loop {
         if state >= 0 {
@@ -114,7 +114,7 @@ fn initialize_inner(my_state: &AtomicIsize, offset: isize, init: &mut dyn FnMut(
             // Otherwise if we see an incomplete state we will attempt to
             // move ourselves into the RUNNING state. If we succeed, then
             // the queue of waiters starts at null (all 0 bits).
-            let old = my_state.compare_and_swap(state, RUNNING, Ordering::SeqCst);
+            let old = my_state.compare_and_swap(state, RUNNING, Ordering::Relaxed);
             if old != state {
                 state = old;
                 continue;
@@ -151,7 +151,7 @@ fn initialize_inner(my_state: &AtomicIsize, offset: isize, init: &mut dyn FnMut(
                     // This is an encoded pointer
                     node.next = (((-state) as usize) << 1) as *mut Waiter;
                 }
-                let old = my_state.compare_and_swap(state, me, Ordering::SeqCst);
+                let old = my_state.compare_and_swap(state, me, Ordering::Release);
                 if old != state {
                     state = old;
                     continue;
@@ -160,10 +160,10 @@ fn initialize_inner(my_state: &AtomicIsize, offset: isize, init: &mut dyn FnMut(
                 // Once we've enqueued ourselves, wait in a loop.
                 // Afterwards reload the state and continue with what we
                 // were doing from before.
-                while !node.signaled.load(Ordering::SeqCst) {
+                while !node.signaled.load(Ordering::Relaxed) {
                     thread::park();
                 }
-                state = my_state.load(Ordering::SeqCst);
+                state = my_state.load(Ordering::Relaxed);
                 continue 'outer;
             }
         }
@@ -174,7 +174,7 @@ impl Drop for Finish<'_> {
     fn drop(&mut self) {
         // Swap out our state with however we finished. We should only ever see
         // an old state which was RUNNING.
-        let queue = self.my_state.swap(self.set_value_on_drop_to, Ordering::SeqCst);
+        let queue = self.my_state.swap(self.set_value_on_drop_to, Ordering::Release);
         assert!(queue <= RUNNING);
 
         // Decode the RUNNING to a list of waiters, then walk that entire list
@@ -187,7 +187,7 @@ impl Drop for Finish<'_> {
                 while !queue.is_null() {
                     let next = (*queue).next;
                     let thread = (*queue).thread.take().unwrap();
-                    (*queue).signaled.store(true, Ordering::SeqCst);
+                    (*queue).signaled.store(true, Ordering::Relaxed);
                     thread.unpark();
                     queue = next;
                 }
