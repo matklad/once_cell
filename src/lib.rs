@@ -568,9 +568,9 @@ pub mod unsync {
 #[cfg(feature = "std")]
 pub mod sync {
     use std::{
-        cell::Cell,
+        cell::{Cell, UnsafeCell},
         fmt,
-        mem::MaybeUninit,
+        mem::{self, ManuallyDrop, MaybeUninit},
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
@@ -619,6 +619,12 @@ pub mod sync {
                 Some(v) => f.debug_tuple("OnceCell").field(v).finish(),
                 None => f.write_str("OnceCell(Uninit)"),
             }
+        }
+    }
+
+    impl<T> Drop for OnceCell<T> {
+        fn drop(&mut self) {
+            self.take_inner();
         }
     }
 
@@ -819,13 +825,25 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
-        pub fn into_inner(self) -> Option<T> {
-            // Because `into_inner` takes `self` by value, the compiler statically verifies
-            // that it is not currently borrowed. So it is safe to move out `Option<T>`.
+        pub fn into_inner(mut self) -> Option<T> {
+            let res = self.take_inner();
+            // Don't drop this `OnceCell`. We just moved out one of the fields, but didn't set
+            // the state to uninitialized.
+            ManuallyDrop::new(self);
+            res
+        }
+
+        /// Takes the wrapped value out of a `OnceCell`.
+        /// Afterwards the cell is no longer initialized, and must be free'd WITHOUT dropping.
+        /// Only used by `into_inner` and `drop`.
+        fn take_inner(&mut self) -> Option<T> {
+            // The mutable reference guarantees there are no other threads that can observe us
+            // taking out the wrapped value.
+            // Right after this function `self` is supposed to be freed, so it makes little sense
+            // to atomically set the state to uninitialized.
             if self.0.is_initialized() {
-                unsafe {
-                    Some(self.0.value.into_inner().assume_init())
-                }
+                let value = mem::replace(&mut self.0.value, UnsafeCell::new(MaybeUninit::uninit()));
+                Some(unsafe { value.into_inner().assume_init() })
             } else {
                 None
             }
