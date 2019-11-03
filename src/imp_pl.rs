@@ -55,7 +55,7 @@ impl<T> OnceCell<T> {
     /// Safety: synchronizes with store to value via `is_initialized` or mutex
     /// lock/unlock, writes value only once because of the mutex.
     #[cold]
-    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
+    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
     {
@@ -77,7 +77,12 @@ impl<T> OnceCell<T> {
             }
             self.is_initialized.store(true, Ordering::Release);
         }
-        Ok(())
+        unsafe {
+            let _acquire = self.is_initialized.load(Ordering::Acquire);
+            debug_assert!(_acquire);
+            let slot: &MaybeUninit<T> = &*self.value.get();
+            Ok(&*slot.as_ptr())
+        }
     }
 }
 

@@ -804,8 +804,7 @@ pub mod sync {
             if let Some(value) = self.get() {
                 return Ok(value);
             }
-            self.0.initialize(f)?;
-            Ok(self.0.sync_get().unwrap())
+            self.0.initialize(f)
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
