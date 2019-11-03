@@ -32,11 +32,11 @@ default = ["std"]
 std = []
 
 [[example]]
-name = "reentrant_init_deadlocks"
+name = "bench"
 required-features = ["std"]
 
 [[example]]
-name = "bench"
+name = "bench_acquire"
 required-features = ["std"]
 
 [[example]]
@@ -45,6 +45,10 @@ required-features = ["std"]
 
 [[example]]
 name = "lazy_static"
+required-features = ["std"]
+
+[[example]]
+name = "reentrant_init_deadlocks"
 required-features = ["std"]
 
 [[example]]
