@@ -50,3 +50,7 @@ required-features = ["std"]
 [[example]]
 name = "regex"
 required-features = ["std"]
+
+[[example]]
+name = "test_synchronization"
+required-features = ["std"]
