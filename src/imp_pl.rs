@@ -33,10 +33,23 @@ impl<T> OnceCell<T> {
         }
     }
 
-    /// Safety: synchronizes with store to value via Release/Acquire.
+    /// Safety: does no synchronization, only checks whether the `OnceCell` is initialized.
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {
-        self.is_initialized.load(Ordering::Acquire)
+        self.is_initialized.load(Ordering::Relaxed)
+    }
+
+    /// Safety: synchronizes with store to value via Release/Acquire.
+    #[inline]
+    pub(crate) fn sync_get(&self) -> Option<&T> {
+        if self.is_initialized.load(Ordering::Acquire) {
+            unsafe {
+                let slot: &MaybeUninit<T> = &*self.value.get();
+                Some(&*slot.as_ptr())
+            }
+        } else {
+            None
+        }
     }
 
     /// Safety: synchronizes with store to value via `is_initialized` or mutex

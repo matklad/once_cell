@@ -671,19 +671,17 @@ pub mod sync {
         /// Returns `None` if the cell is empty, or being initialized. This
         /// method never blocks.
         pub fn get(&self) -> Option<&T> {
-            if self.0.is_initialized() {
-                // Safe b/c checked is_initialize
-                Some(unsafe { self.get_unchecked() })
-            } else {
-                None
-            }
+            self.0.sync_get()
         }
 
         /// Gets the mutable reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
         pub fn get_mut(&mut self) -> Option<&mut T> {
-            // Safe b/c we have a unique access.
+            // Safe because we have a unique access.
+            // We don't need to do any synchronization. Either we did the initialization ourselves,
+            // or whatever mechanism send us the unique reference from another thread took care of
+            // synchronization.
             if self.0.is_initialized() {
                 Some(unsafe { &mut *(*self.0.value.get()).as_mut_ptr() })
             } else {
@@ -807,10 +805,7 @@ pub mod sync {
                 return Ok(value);
             }
             self.0.initialize(f)?;
-
-            // Safe b/c called initialize
-            debug_assert!(self.0.is_initialized());
-            Ok(unsafe { self.get_unchecked() })
+            Ok(self.0.sync_get().unwrap())
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns

@@ -66,14 +66,27 @@ impl<T> OnceCell<T> {
         }
     }
 
-    /// Safety: synchronizes with store to value via Release/(Acquire|SeqCst).
+    /// Safety: does no synchronization, only checks whether the `OnceCell` is initialized.
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {
+        self.state_and_queue.load(Ordering::Relaxed) == COMPLETE
+    }
+
+    /// Safety: synchronizes with store to value via Release/Acquire.
+    #[inline]
+    pub(crate) fn sync_get(&self) -> Option<&T> {
         // An `Acquire` load is enough because that makes all the initialization
         // operations visible to us, and, this being a fast path, weaker
         // ordering helps with performance. This `Acquire` synchronizes with
         // `SeqCst` operations on the slow path.
-        self.state_and_queue.load(Ordering::Acquire) == COMPLETE
+        if self.state_and_queue.load(Ordering::Acquire) == COMPLETE {
+            unsafe {
+                let slot: &MaybeUninit<T> = &*self.value.get();
+                Some(&*slot.as_ptr())
+            }
+        } else {
+            None
+        }
     }
 
     /// Safety: synchronizes with store to value via SeqCst read from state,
