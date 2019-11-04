@@ -4,10 +4,9 @@
 //   * init function can fail
 
 use std::{
-    cell::UnsafeCell,
+    cell::{Cell, UnsafeCell},
     marker::PhantomData,
     panic::{RefUnwindSafe, UnwindSafe},
-    ptr,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     thread::{self, Thread},
 };
@@ -17,7 +16,7 @@ pub(crate) struct OnceCell<T> {
     // This `state` word is actually an encoded version of just a pointer to a
     // `Waiter`, so we add the `PhantomData` appropriately.
     state: AtomicUsize,
-    _marker: PhantomData<*mut Waiter>,
+    _marker: PhantomData<*const Waiter>,
     // FIXME: switch to `std::mem::MaybeUninit` once we are ready to bump MSRV
     // that far. It was stabilized in 1.36.0, so, if you are reading this and
     // it's higher than 1.46.0 outside, please send a PR! ;) (and to the same
@@ -46,11 +45,16 @@ const COMPLETE: usize = 0x2;
 // this is in the RUNNING state.
 const STATE_MASK: usize = 0x3;
 
-// Representation of a node in the linked list of waiters in the RUNNING state.
+// Representation of a node in the linked list of waiters, used while in the
+// RUNNING state.
+// Note: `Waiter` can't hold a mutable pointer to the next thread, because then
+// we would both hand out a mutable reference to its `Waiter` node, and keep a
+// shared reference to check `signaled`. Instead we use shared references and
+// interior mutability.
 struct Waiter {
-    thread: Option<Thread>,
+    thread: Cell<Option<Thread>>,
     signaled: AtomicBool,
-    next: *mut Waiter,
+    next: *const Waiter,
 }
 
 // Helper struct used to clean up after a closure call with a `Drop`
@@ -148,32 +152,46 @@ fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> b
             // head of the list and bail out if we ever see a state that's
             // not RUNNING.
             _ => {
-                assert!(state & STATE_MASK == RUNNING);
-                let mut node = Waiter {
-                    thread: Some(thread::current()),
-                    signaled: AtomicBool::new(false),
-                    next: ptr::null_mut(),
-                };
-                let me = &mut node as *mut Waiter as usize;
-                assert!(me & STATE_MASK == 0);
+                // Note: the following code was carefully written to avoid creating a
+                // mutable reference to `node` that gets aliased.
+                loop {
+                    // Don't queue this thread if the status is no longer running,
+                    // otherwise we will not be woken up.
+                    if state & STATE_MASK != RUNNING {
+                        break;
+                    }
 
-                while state & STATE_MASK == RUNNING {
-                    node.next = (state & !STATE_MASK) as *mut Waiter;
-                    let old = my_state.compare_and_swap(state, me | RUNNING, Ordering::SeqCst);
+                    // Create the node for our current thread.
+                    let node = Waiter {
+                        thread: Cell::new(Some(thread::current())),
+                        signaled: AtomicBool::new(false),
+                        next: (state & !STATE_MASK) as *const Waiter,
+                    };
+                    let me = &node as *const Waiter as usize;
+
+                    // Try to slide in the node at the head of the linked list, making sure
+                    // that another thread didn't just replace the head of the linked list.
+                    let old = my_state.compare_and_swap(state, me | RUNNING, Ordering::Release);
                     if old != state {
                         state = old;
                         continue;
                     }
 
-                    // Once we've enqueued ourselves, wait in a loop.
-                    // Afterwards reload the state and continue with what we
-                    // were doing from before.
-                    while !node.signaled.load(Ordering::SeqCst) {
+                    // We have enqueued ourselves, now lets wait.
+                    // It is important not to return before being signaled, otherwise we
+                    // would drop our `Waiter` node and leave a hole in the linked list
+                    // (and a dangling reference). Guard against spurious wakeups by
+                    // reparking ourselves until we are signaled.
+                    while !node.signaled.load(Ordering::Acquire) {
+                        // If the managing thread happens to signal and unpark us before we
+                        // can park ourselves, the result could be this thread never gets
+                        // unparked. Luckily `park` comes with the guarantee that if it got
+                        // an `unpark` just before on an unparked thread is does not park.
                         thread::park();
                     }
-                    state = my_state.load(Ordering::SeqCst);
-                    continue 'outer;
+                    break;
                 }
+                state = my_state.load(Ordering::Acquire);
             }
         }
     }
@@ -196,7 +214,7 @@ impl Drop for Finish<'_> {
         // in the node it can be free'd! As a result we load the `thread` to
         // signal ahead of time and then unpark it after the store.
         unsafe {
-            let mut queue = (queue & !STATE_MASK) as *mut Waiter;
+            let mut queue = (queue & !STATE_MASK) as *const Waiter;
             while !queue.is_null() {
                 let next = (*queue).next;
                 let thread = (*queue).thread.take().unwrap();
