@@ -43,7 +43,7 @@ impl<T> OnceCell<T> {
     #[cold]
     pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
     where
-        F: FnOnce() -> Result<T, E>,
+        F: FnOnce(bool) -> Result<T, E>,
     {
         let _guard = self.mutex.lock();
         if !self.is_initialized() {
@@ -55,7 +55,7 @@ impl<T> OnceCell<T> {
             //   but that is more complicated
             // - finally, if it returns Ok, we store the value and store the flag with
             //   `Release`, which synchronizes with `Acquire`s.
-            let value = f()?;
+            let value = f(false)?; // FIXME: do proper poisoning
             let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
             debug_assert!(slot.is_none());
             *slot = Some(value);

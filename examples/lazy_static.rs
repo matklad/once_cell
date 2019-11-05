@@ -14,7 +14,7 @@ static HASHMAP: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
 // Same, but completely without macros
 fn hashmap() -> &'static HashMap<u32, &'static str> {
     static INSTANCE: OnceCell<HashMap<u32, &'static str>> = OnceCell::new();
-    INSTANCE.get_or_init(|| {
+    INSTANCE.get_or_init(|_| {
         let mut m = HashMap::new();
         m.insert(0, "foo");
         m.insert(1, "bar");

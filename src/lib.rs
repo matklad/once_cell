@@ -67,7 +67,7 @@ use once_cell::sync::OnceCell;
 
 fn global_data() -> &'static Mutex<HashMap<i32, String>> {
     static INSTANCE: OnceCell<Mutex<HashMap<i32, String>>> = OnceCell::new();
-    INSTANCE.get_or_init(|| {
+    INSTANCE.get_or_init(|_| {
         let mut m = HashMap::new();
         m.insert(13, "Spica".to_string());
         m.insert(74, "Hoyten".to_string());
@@ -143,7 +143,7 @@ For example, this is a `regex!` macro which takes a string literal and returns a
 macro_rules! regex {
     ($re:literal $(,)?) => {{
         static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
-        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+        RE.get_or_init(|_| regex::Regex::new($re).unwrap())
     }};
 }
 ```
@@ -577,7 +577,7 @@ pub mod sync {
     /// assert!(CELL.get().is_none());
     ///
     /// std::thread::spawn(|| {
-    ///     let value: &String = CELL.get_or_init(|| {
+    ///     let value: &String = CELL.get_or_init(|_| {
     ///         "Hello, World!".to_string()
     ///     });
     ///     assert_eq!(value, "Hello, World!");
@@ -620,7 +620,7 @@ pub mod sync {
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
             let cell = Self::new();
-            cell.get_or_init(|| value);
+            cell.get_or_init(|_| value);
             cell
         }
     }
@@ -704,7 +704,7 @@ pub mod sync {
         /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
             let mut value = Some(value);
-            self.get_or_init(|| value.take().unwrap());
+            self.get_or_init(|_| value.take().unwrap());
             match value {
                 None => Ok(()),
                 Some(value) => Err(value),
@@ -732,17 +732,17 @@ pub mod sync {
         /// use once_cell::sync::OnceCell;
         ///
         /// let cell = OnceCell::new();
-        /// let value = cell.get_or_init(|| 92);
+        /// let value = cell.get_or_init(|_| 92);
         /// assert_eq!(value, &92);
-        /// let value = cell.get_or_init(|| unreachable!());
+        /// let value = cell.get_or_init(|_| unreachable!());
         /// assert_eq!(value, &92);
         /// ```
         pub fn get_or_init<F>(&self, f: F) -> &T
         where
-            F: FnOnce() -> T,
+            F: FnOnce(bool) -> T,
         {
             enum Void {}
-            match self.get_or_try_init(|| Ok::<T, Void>(f())) {
+            match self.get_or_try_init(|x| Ok::<T, Void>(f(x))) {
                 Ok(val) => val,
                 Err(void) => match void {},
             }
@@ -766,9 +766,9 @@ pub mod sync {
         /// use once_cell::sync::OnceCell;
         ///
         /// let cell = OnceCell::new();
-        /// assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
+        /// assert_eq!(cell.get_or_try_init(|_| Err(())), Err(()));
         /// assert!(cell.get().is_none());
-        /// let value = cell.get_or_try_init(|| -> Result<i32, ()> {
+        /// let value = cell.get_or_try_init(|_| -> Result<i32, ()> {
         ///     Ok(92)
         /// });
         /// assert_eq!(value, Ok(&92));
@@ -776,7 +776,7 @@ pub mod sync {
         /// ```
         pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
         where
-            F: FnOnce() -> Result<T, E>,
+            F: FnOnce(bool) -> Result<T, E>,
         {
             // Fast path check
             if let Some(value) = self.get() {
@@ -888,7 +888,7 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| match this.init.take() {
+            this.cell.get_or_init(|_| match this.init.take() {
                 Some(f) => f(),
                 None => panic!("Lazy instance has previously been poisoned"),
             })

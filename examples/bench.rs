@@ -22,7 +22,7 @@ fn main() {
 
 fn thread_main(i: usize) {
     for _ in 0..N_ROUNDS {
-        let &value = CELL.get_or_init(|| i);
+        let &value = CELL.get_or_init(|_| i);
         assert!(value < N_THREADS)
     }
 }

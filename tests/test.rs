@@ -208,12 +208,12 @@ mod sync {
         assert!(c.get().is_none());
         scope(|s| {
             s.spawn(|_| {
-                c.get_or_init(|| 92);
+                c.get_or_init(|_| 92);
                 assert_eq!(c.get(), Some(&92));
             });
         })
         .unwrap();
-        c.get_or_init(|| panic!("Kabom!"));
+        c.get_or_init(|_| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
     }
 
@@ -248,7 +248,7 @@ mod sync {
         let x = OnceCell::new();
         scope(|s| {
             s.spawn(|_| {
-                x.get_or_init(|| Dropper);
+                x.get_or_init(|_| Dropper);
                 assert_eq!(DROP_CNT.load(SeqCst), 0);
                 drop(x);
             });
@@ -281,14 +281,14 @@ mod sync {
         assert!(cell.get().is_none());
 
         let res =
-            std::panic::catch_unwind(|| cell.get_or_try_init(|| -> Result<_, ()> { panic!() }));
+            std::panic::catch_unwind(|| cell.get_or_try_init(|_| -> Result<_, ()> { panic!() }));
         assert!(res.is_err());
         assert!(cell.get().is_none());
 
-        assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
+        assert_eq!(cell.get_or_try_init(|_| Err(())), Err(()));
 
         assert_eq!(
-            cell.get_or_try_init(|| Ok::<_, ()>("hello".to_string())),
+            cell.get_or_try_init(|_| Ok::<_, ()>("hello".to_string())),
             Ok(&"hello".to_string())
         );
         assert_eq!(cell.get(), Some(&"hello".to_string()));
@@ -436,7 +436,7 @@ mod sync {
     fn static_lazy_via_fn() {
         fn xs() -> &'static Vec<i32> {
             static XS: OnceCell<Vec<i32>> = OnceCell::new();
-            XS.get_or_init(|| {
+            XS.get_or_init(|_| {
                 let mut xs = Vec::new();
                 xs.push(1);
                 xs.push(2);
@@ -472,7 +472,7 @@ mod sync {
                 $($body:tt)*
             }) => {{
                 static ONCE_CELL: OnceCell<$ty> = OnceCell::new();
-                fn init() -> $ty {
+                fn init(_panicked: bool) -> $ty {
                     $($body)*
                 }
                 ONCE_CELL.get_or_init(init)
@@ -528,7 +528,7 @@ mod sync {
         let barrier = Barrier::new(2);
         scope(|scope| {
             scope.spawn(|_| {
-                cell.get_or_init(|| {
+                cell.get_or_init(|_| {
                     barrier.wait();
                     barrier.wait();
                     "hello".to_string()

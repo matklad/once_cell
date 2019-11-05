@@ -29,7 +29,7 @@ fn thread_main(i: usize) {
     let mut data = [i; 128];
     let mut accum = 0usize;
     for _ in 0..N_ROUNDS {
-        let _value = CELL.get_or_init(|| i+1);
+        let _value = CELL.get_or_init(|_| i+1);
         let k = OTHER.fetch_add(data[accum & 0x7F] as usize, Ordering::Relaxed);
         for j in data.iter_mut() {
             *j = (*j).wrapping_add(accum);

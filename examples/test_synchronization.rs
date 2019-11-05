@@ -17,7 +17,7 @@ static RESULT: OnceCell<usize> = OnceCell::new();
 
 fn main() {
     let start = std::time::Instant::now();
-    CELLS.get_or_init(|| vec![OnceCell::new(); N_ROUNDS]);
+    CELLS.get_or_init(|_| vec![OnceCell::new(); N_ROUNDS]);
     let threads =
         (0..N_THREADS).map(|i| std::thread::spawn(move || thread_main(i))).collect::<Vec<_>>();
     for thread in threads {
@@ -31,8 +31,8 @@ fn thread_main(i: usize) {
     let cells = CELLS.get().unwrap();
     let mut accum = 0;
     for cell in cells.iter() {
-        let &value = cell.get_or_init(|| i);
+        let &value = cell.get_or_init(|_| i);
         accum += value;
     }
-    assert_eq!(RESULT.get_or_init(|| accum), &accum);
+    assert_eq!(RESULT.get_or_init(|_| accum), &accum);
 }

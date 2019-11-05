@@ -39,8 +39,9 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 // Three states that a OnceCell can be in, encoded into the lower bits of `state` in
 // the OnceCell structure.
 const INCOMPLETE: usize = 0x0;
-const RUNNING: usize = 0x1;
-const COMPLETE: usize = 0x2;
+const POISONED: usize = 0x1;
+const RUNNING: usize = 0x2;
+const COMPLETE: usize = 0x3;
 
 // Mask to learn about the state. All other bits are the queue of waiters if
 // this is in the RUNNING state.
@@ -56,7 +57,7 @@ struct Waiter {
 // Helper struct used to clean up after a closure call with a `Drop`
 // implementation to also run on panic.
 struct Finish<'a> {
-    failed: bool,
+    set_state_on_drop_to: usize,
     my_state: &'a AtomicUsize,
 }
 
@@ -85,14 +86,14 @@ impl<T> OnceCell<T> {
     #[cold]
     pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
     where
-        F: FnOnce() -> Result<T, E>,
+        F: FnOnce(bool) -> Result<T, E>,
     {
         let mut f = Some(f);
         let mut res: Result<(), E> = Ok(());
         let slot = &self.value;
-        initialize_inner(&self.state, &mut || {
+        initialize_inner(&self.state, &mut |poisoned| {
             let f = f.take().unwrap();
-            match f() {
+            match f(poisoned) {
                 Ok(value) => {
                     unsafe { *slot.get() = Some(value) };
                     true
@@ -108,7 +109,7 @@ impl<T> OnceCell<T> {
 }
 
 // Note: this is intentionally monomorphic
-fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
+fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut(bool) -> bool) {
     // This cold path uses SeqCst consistently because the
     // performance difference really does not matter there, and
     // SeqCst minimizes the chances of something going wrong.
@@ -118,11 +119,12 @@ fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> b
         match state {
             // If we're complete, then there's nothing to do, we just
             // jettison out as we shouldn't run the closure.
-            COMPLETE => return true,
+            COMPLETE => return,
 
             // Otherwise if we see an incomplete state we will attempt to
             // move ourselves into the RUNNING state. If we succeed, then
             // the queue of waiters starts at null (all 0 bits).
+            POISONED |
             INCOMPLETE => {
                 let old = my_state.compare_and_swap(state, RUNNING, Ordering::SeqCst);
                 if old != state {
@@ -135,11 +137,15 @@ fn initialize_inner(my_state: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> b
                 // the `Drop` implementation here is responsible for waking
                 // up other waiters both in the normal return and panicking
                 // case.
-                let mut complete = Finish { failed: true, my_state };
-                let success = init();
+                let mut complete = Finish { set_state_on_drop_to: POISONED, my_state };
+                let success = init(state == POISONED);
                 // Difference from std: abort if `init` errored.
-                complete.failed = !success;
-                return success;
+                complete.set_state_on_drop_to = if success {
+                    COMPLETE
+                } else {
+                    state // Restore INCOMPLETE OR POISONED
+                };
+                return;
             }
 
             // All other values we find should correspond to the RUNNING
@@ -183,12 +189,7 @@ impl Drop for Finish<'_> {
     fn drop(&mut self) {
         // Swap out our state with however we finished. We should only ever see
         // an old state which was RUNNING.
-        let queue = if self.failed {
-            // Difference from std: flip back to INCOMPLETE rather than POISONED.
-            self.my_state.swap(INCOMPLETE, Ordering::SeqCst)
-        } else {
-            self.my_state.swap(COMPLETE, Ordering::SeqCst)
-        };
+        let queue = self.my_state.swap(self.set_state_on_drop_to, Ordering::AcqRel);
         assert_eq!(queue & STATE_MASK, RUNNING);
 
         // Decode the RUNNING to a list of waiters, then walk that entire list
@@ -220,7 +221,7 @@ mod tests {
     impl<T> OnceCell<T> {
         fn init(&self, f: impl FnOnce() -> T) {
             enum Void {}
-            let _ = self.initialize(|| Ok::<T, Void>(f()));
+            let _ = self.initialize(|_| Ok::<T, Void>(f()));
         }
     }
 
