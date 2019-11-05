@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 const N_THREADS: usize = 32;
 const N_ROUNDS: usize = 100_000_000;
 
-static ONCE_CELL: Lazy<Vec<String>> = Lazy::new(|| vec!["Spica".to_string(), "Hoyten".to_string()]);
+static ONCE_CELL: Lazy<Vec<String>> = Lazy::new(|_| vec!["Spica".to_string(), "Hoyten".to_string()]);
 
 lazy_static! {
     static ref LAZY_STATIC: Vec<String> = vec!["Spica".to_string(), "Hoyten".to_string()];

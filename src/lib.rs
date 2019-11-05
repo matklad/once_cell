@@ -82,7 +82,7 @@ There are also `sync::Lazy` and `unsync::Lazy` convenience types to streamline t
 use std::{sync::Mutex, collections::HashMap};
 use once_cell::sync::Lazy;
 
-static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = Lazy::new(|| {
+static GLOBAL_DATA: Lazy<Mutex<HashMap<i32, String>>> = Lazy::new(|_| {
     let mut m = HashMap::new();
     m.insert(13, "Spica".to_string());
     m.insert(74, "Hoyten".to_string());
@@ -821,7 +821,7 @@ pub mod sync {
     ///
     /// use once_cell::sync::Lazy;
     ///
-    /// static HASHMAP: Lazy<HashMap<i32, String>> = Lazy::new(|| {
+    /// static HASHMAP: Lazy<HashMap<i32, String>> = Lazy::new(|_| {
     ///     println!("initializing");
     ///     let mut m = HashMap::new();
     ///     m.insert(13, "Spica".to_string());
@@ -843,7 +843,7 @@ pub mod sync {
     ///     //   Some("Hoyten")
     /// }
     /// ```
-    pub struct Lazy<T, F = fn() -> T> {
+    pub struct Lazy<T, F = fn(bool) -> T> {
         cell: OnceCell<T>,
         init: Cell<Option<F>>,
     }
@@ -873,7 +873,7 @@ pub mod sync {
         }
     }
 
-    impl<T, F: FnOnce() -> T> Lazy<T, F> {
+    impl<T, F: FnOnce(bool) -> T> Lazy<T, F> {
         /// Forces the evaluation of this lazy value and
         /// returns a reference to result. This is equivalent
         /// to the `Deref` impl, but is explicit.
@@ -882,20 +882,20 @@ pub mod sync {
         /// ```
         /// use once_cell::sync::Lazy;
         ///
-        /// let lazy = Lazy::new(|| 92);
+        /// let lazy = Lazy::new(|_| 92);
         ///
         /// assert_eq!(Lazy::force(&lazy), &92);
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|_| match this.init.take() {
-                Some(f) => f(),
+            this.cell.get_or_init(|poisoned| match this.init.take() {
+                Some(f) => f(poisoned),
                 None => panic!("Lazy instance has previously been poisoned"),
             })
         }
     }
 
-    impl<T, F: FnOnce() -> T> ::std::ops::Deref for Lazy<T, F> {
+    impl<T, F: FnOnce(bool) -> T> ::std::ops::Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
@@ -905,7 +905,7 @@ pub mod sync {
     impl<T: Default> Default for Lazy<T> {
         /// Creates a new lazy value using `Default` as the initializing function.
         fn default() -> Lazy<T> {
-            Lazy::new(T::default)
+            Lazy::new(|_| T::default())
         }
     }
 

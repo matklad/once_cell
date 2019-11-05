@@ -3,7 +3,7 @@ extern crate once_cell;
 use once_cell::sync::{Lazy, OnceCell};
 use std::collections::HashMap;
 
-static HASHMAP: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
+static HASHMAP: Lazy<HashMap<u32, &'static str>> = Lazy::new(|_| {
     let mut m = HashMap::new();
     m.insert(0, "foo");
     m.insert(1, "bar");

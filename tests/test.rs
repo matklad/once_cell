@@ -366,7 +366,7 @@ mod sync {
     #[test]
     fn lazy_new() {
         let called = AtomicUsize::new(0);
-        let x = Lazy::new(|| {
+        let x = Lazy::new(|_| {
             called.fetch_add(1, SeqCst);
             92
         });
@@ -415,7 +415,7 @@ mod sync {
     #[test]
     #[cfg(not(miri))] // leaks memory
     fn static_lazy() {
-        static XS: Lazy<Vec<i32>> = Lazy::new(|| {
+        static XS: Lazy<Vec<i32>> = Lazy::new(|_| {
             let mut xs = Vec::new();
             xs.push(1);
             xs.push(2);
@@ -450,7 +450,7 @@ mod sync {
     #[test]
     #[cfg(not(miri))] // miri doesn't support panics
     fn lazy_poisoning() {
-        let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
+        let x: Lazy<String> = Lazy::new(|_| panic!("kaboom"));
         for _ in 0..2 {
             let res = std::panic::catch_unwind(|| x.len());
             assert!(res.is_err());
