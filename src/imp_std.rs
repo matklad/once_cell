@@ -212,7 +212,6 @@ impl Drop for Finish<'_> {
 #[cfg(test)]
 mod tests {
     use std::panic;
-    #[cfg(not(miri))] // miri doesn't support threads
     use std::{sync::mpsc::channel, thread};
 
     use super::OnceCell;
@@ -235,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support threads
+    #[cfg_attr(miri, ignore)] // miri doesn't support threads
     fn stampede_once() {
         static O: OnceCell<()> = OnceCell::new();
         static mut RUN: bool = false;
@@ -272,7 +271,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support panics
     fn poison_bad() {
         static O: OnceCell<()> = OnceCell::new();
 
@@ -294,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(miri))] // miri doesn't support panics
+    #[cfg_attr(miri, ignore)] // miri doesn't support threads
     fn wait_for_force_to_finish() {
         static O: OnceCell<()> = OnceCell::new();
 
