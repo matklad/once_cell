@@ -8,4 +8,6 @@ rustup toolchain add "$MIRI_NIGHTLY"
 rustup component add miri --toolchain "$MIRI_NIGHTLY"
 rustup run "$MIRI_NIGHTLY" -- cargo miri setup
 
-rustup run "$MIRI_NIGHTLY" -- cargo miri test
+# Miri considers runtime-allocated data in statics as leaked, so we
+# have to ignore leeks. See <https://github.com/rust-lang/miri/issues/940>.
+rustup run "$MIRI_NIGHTLY" -- cargo miri test -- -Zmiri-ignore-leaks

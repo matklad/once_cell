@@ -461,7 +461,6 @@ mod sync {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // leaks memory
     fn eval_once_macro() {
         macro_rules! eval_once {
             (|| -> $ty:ty {
