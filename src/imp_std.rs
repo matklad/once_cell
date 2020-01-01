@@ -3,11 +3,17 @@
 //   * no poisoning
 //   * init function can fail
 
+use core::{
+    cell::UnsafeCell,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+#[cfg(feature = "std")]
 use std::{
-    cell::{Cell, UnsafeCell},
+    cell::Cell,
     marker::PhantomData,
     panic::{RefUnwindSafe, UnwindSafe},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::AtomicBool,
     thread::{self, Thread},
 };
 
@@ -16,12 +22,13 @@ pub(crate) struct OnceCell<T> {
     // This `state` word is actually an encoded version of just a pointer to a
     // `Waiter`, so we add the `PhantomData` appropriately.
     state_and_queue: AtomicUsize,
-    _marker: PhantomData<*mut Waiter>,
     // FIXME: switch to `std::mem::MaybeUninit` once we are ready to bump MSRV
     // that far. It was stabilized in 1.36.0, so, if you are reading this and
     // it's higher than 1.46.0 outside, please send a PR! ;) (and do the same
     // for `Lazy`, while we are at it).
     pub(crate) value: UnsafeCell<Option<T>>,
+    #[cfg(feature = "std")]
+    _marker: PhantomData<*mut Waiter>,
 }
 
 // Why do we need `T: Send`?
@@ -32,7 +39,9 @@ pub(crate) struct OnceCell<T> {
 unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
 unsafe impl<T: Send> Send for OnceCell<T> {}
 
+#[cfg(feature = "std")]
 impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
+#[cfg(feature = "std")]
 impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 // Three states that a OnceCell can be in, encoded into the lower bits of `state` in
@@ -46,6 +55,7 @@ const COMPLETE: usize = 0x2;
 const STATE_MASK: usize = 0x3;
 
 // Representation of a node in the linked list of waiters in the RUNNING state.
+#[cfg(feature = "std")]
 #[repr(align(4))] // Ensure the two lower bits are free to use as state bits.
 struct Waiter {
     thread: Cell<Option<Thread>>,
@@ -65,8 +75,9 @@ impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
             state_and_queue: AtomicUsize::new(INCOMPLETE),
-            _marker: PhantomData,
             value: UnsafeCell::new(None),
+            #[cfg(feature = "std")]
+            _marker: PhantomData,
         }
     }
 
@@ -136,6 +147,9 @@ fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> 
                 waiter_queue.set_state_on_drop_to = if success { COMPLETE } else { INCOMPLETE };
                 return success;
             }
+            #[cfg(not(feature = "std"))]
+            _ => panic!("assume-no-threads-or-interrupts is set, but there are threads!"),
+            #[cfg(feature = "std")]
             _ => {
                 assert!(state_and_queue & STATE_MASK == RUNNING);
                 wait(&my_state_and_queue, state_and_queue);
@@ -146,6 +160,7 @@ fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> 
 }
 
 // Copy-pasted from std exactly.
+#[cfg(feature = "std")]
 fn wait(state_and_queue: &AtomicUsize, mut current_state: usize) {
     loop {
         if current_state & STATE_MASK != RUNNING {
@@ -180,6 +195,7 @@ impl Drop for WaiterQueue<'_> {
 
         assert_eq!(state_and_queue & STATE_MASK, RUNNING);
 
+        #[cfg(feature = "std")]
         unsafe {
             let mut queue = (state_and_queue & !STATE_MASK) as *const Waiter;
             while !queue.is_null() {

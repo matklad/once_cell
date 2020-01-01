@@ -30,6 +30,10 @@ regex =  "1.2.0"
 default = ["std"]
 # Enables `once_cell::sync` module.
 std = []
+# Enables `sync` module for `no_std`, assuming that no concurrent initialization of `OnceCell` can happen.
+# This is mostly intended for WASM.
+# If concurrent initialization does happen, the result is a panic.
+assume-no-threads-or-interrupts = []
 
 [[example]]
 name = "bench"

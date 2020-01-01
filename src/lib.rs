@@ -228,7 +228,7 @@ might be easier to debug than a deadlock.
 #[path = "imp_pl.rs"]
 mod imp;
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "assume-no-threads-or-interrupts"))]
 #[cfg(not(feature = "parking_lot"))]
 #[path = "imp_std.rs"]
 mod imp;
@@ -558,9 +558,11 @@ pub mod unsync {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "assume-no-threads-or-interrupts"))]
 pub mod sync {
-    use std::{cell::Cell, fmt, hint::unreachable_unchecked, panic::RefUnwindSafe};
+    use core::{cell::Cell, fmt, hint::unreachable_unchecked, ops::Deref};
+    #[cfg(feature = "std")]
+    use std::panic::RefUnwindSafe;
 
     use crate::imp::OnceCell as Imp;
 
@@ -895,7 +897,7 @@ pub mod sync {
         }
     }
 
-    impl<T, F: FnOnce() -> T> ::std::ops::Deref for Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
