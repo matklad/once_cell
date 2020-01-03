@@ -566,8 +566,13 @@ pub mod sync {
 
     /// A thread-safe cell which can be written to only once.
     ///
-    /// Unlike `std::sync::Mutex`, a `OnceCell` provides simple `&` references
-    /// to the contents.
+    /// `OnceCell` provides `&` references to the contents without RAII guards.
+    ///
+    /// Reading a non-`None` value out of `OnceCell` establishes a
+    /// happens-before relationship with a corresponding write. For example, if
+    /// thread A initializes the cell with `get_or_init(f)`, and thread B
+    /// subsequently reads the result of this call, B also observes all the side
+    /// effects of `f`.
     ///
     /// # Example
     /// ```
