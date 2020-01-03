@@ -155,7 +155,7 @@ This macro can be useful to avoid "compile regex on every loop iteration" proble
 |`!Sync` types         | Access Mode            | Drawbacks                                     |
 |----------------------|------------------------|-----------------------------------------------|
 |`Cell<T>`             | `T`                    | requires `T: Copy` for `get`                  |
-|`RefCel<T>`           | `RefMut<T>` / `Ref<T>` | may panic at runtime                          |
+|`RefCell<T>`          | `RefMut<T>` / `Ref<T>` | may panic at runtime                          |
 |`unsync::OnceCell<T>` | `&T`                   | assignable only once                          |
 
 |`Sync` types          | Access Mode            | Drawbacks                                     |
