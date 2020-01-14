@@ -112,6 +112,25 @@ mod unsync {
     }
 
     #[test]
+    fn lazy_deref_mut() {
+        let called = Cell::new(0);
+        let mut x = Lazy::new(|| {
+            called.set(called.get() + 1);
+            92
+        });
+
+        assert_eq!(called.get(), 0);
+
+        let y = *x - 30;
+        assert_eq!(y, 62);
+        assert_eq!(called.get(), 1);
+
+        *x /= 2;
+        assert_eq!(*x, 46);
+        assert_eq!(called.get(), 1);
+    }
+
+    #[test]
     fn lazy_default() {
         static CALLED: AtomicUsize = AtomicUsize::new(0);
 
@@ -381,6 +400,25 @@ mod sync {
 
         let y = *x - 30;
         assert_eq!(y, 62);
+        assert_eq!(called.load(SeqCst), 1);
+    }
+
+    #[test]
+    fn lazy_deref_mut() {
+        let called = AtomicUsize::new(0);
+        let mut x = Lazy::new(|| {
+            called.fetch_add(1, SeqCst);
+            92
+        });
+
+        assert_eq!(called.load(SeqCst), 0);
+
+        let y = *x - 30;
+        assert_eq!(y, 62);
+        assert_eq!(called.load(SeqCst), 1);
+
+        *x /= 2;
+        assert_eq!(*x, 46);
         assert_eq!(called.load(SeqCst), 1);
     }
 

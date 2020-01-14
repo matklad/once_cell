@@ -237,7 +237,7 @@ pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
         fmt,
-        ops::Deref,
+        ops::{Deref, DerefMut},
     };
 
     #[cfg(feature = "std")]
@@ -550,6 +550,13 @@ pub mod unsync {
         }
     }
 
+    impl<T, F: FnOnce() -> T> DerefMut for Lazy<T, F> {
+        fn deref_mut(&mut self) -> &mut T {
+            Lazy::force(self);
+            self.cell.get_mut().unwrap_or_else(|| unreachable!())
+        }
+    }
+
     impl<T: Default> Default for Lazy<T> {
         /// Creates a new lazy value using `Default` as the initializing function.
         fn default() -> Lazy<T> {
@@ -560,7 +567,13 @@ pub mod unsync {
 
 #[cfg(feature = "std")]
 pub mod sync {
-    use std::{cell::Cell, fmt, hint::unreachable_unchecked, panic::RefUnwindSafe};
+    use std::{
+        cell::Cell,
+        fmt,
+        hint::unreachable_unchecked,
+        ops::{Deref, DerefMut},
+        panic::RefUnwindSafe,
+    };
 
     use crate::imp::OnceCell as Imp;
 
@@ -900,10 +913,17 @@ pub mod sync {
         }
     }
 
-    impl<T, F: FnOnce() -> T> ::std::ops::Deref for Lazy<T, F> {
+    impl<T, F: FnOnce() -> T> Deref for Lazy<T, F> {
         type Target = T;
         fn deref(&self) -> &T {
             Lazy::force(self)
+        }
+    }
+
+    impl<T, F: FnOnce() -> T> DerefMut for Lazy<T, F> {
+        fn deref_mut(&mut self) -> &mut T {
+            Lazy::force(self);
+            self.cell.get_mut().unwrap_or_else(|| unreachable!())
         }
     }
 
