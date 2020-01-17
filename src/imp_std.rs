@@ -35,11 +35,12 @@ unsafe impl<T: Send> Send for OnceCell<T> {}
 impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
 impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
-// Three states that a OnceCell can be in, encoded into the lower bits of `state` in
+// States that a OnceCell can be in, encoded into the lower bits of `state` in
 // the OnceCell structure.
 const INCOMPLETE: usize = 0x0;
-const RUNNING: usize = 0x1;
-const COMPLETE: usize = 0x2;
+const POISONED: usize = 0x1;
+const RUNNING: usize = 0x2;
+const COMPLETE: usize = 0x3;
 
 // Mask to learn about the state. All other bits are the queue of waiters if
 // this is in the RUNNING state.
@@ -106,6 +107,11 @@ impl<T> OnceCell<T> {
         });
         res
     }
+
+    #[inline]
+    pub(crate) fn is_poisoned(&self) -> bool {
+        self.state_and_queue.load(Ordering::Relaxed) == POISONED
+    }
 }
 
 // Corresponds to `std::sync::Once::call_inner`
@@ -116,6 +122,7 @@ fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> 
     loop {
         match state_and_queue {
             COMPLETE => return true,
+            POISONED |
             INCOMPLETE => {
                 let old = my_state_and_queue.compare_and_swap(
                     state_and_queue,
@@ -128,7 +135,7 @@ fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> 
                 }
                 let mut waiter_queue = WaiterQueue {
                     state_and_queue: my_state_and_queue,
-                    set_state_on_drop_to: INCOMPLETE, // Difference, std uses `POISONED`
+                    set_state_on_drop_to: POISONED,
                 };
                 let success = init();
 
