@@ -827,6 +827,10 @@ pub mod sync {
             // that it is not currently borrowed. So it is safe to move out `Option<T>`.
             self.0.value.into_inner()
         }
+
+        pub fn prev_init_panicked(&self) -> bool {
+            self.0.is_poisoned()
+        }
     }
 
     /// A value which is initialized on the first access.
@@ -906,9 +910,13 @@ pub mod sync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| match this.init.take() {
-                Some(f) => f(),
-                None => panic!("Lazy instance has previously been poisoned"),
+            this.cell.get_or_init(|| {
+                if !this.cell.0.is_poisoned() {
+                    let f = this.init.take().unwrap();
+                    f()
+                } else {
+                    panic!("Lazy instance has previously been poisoned")
+                }
             })
         }
     }
