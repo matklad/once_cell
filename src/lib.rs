@@ -494,7 +494,7 @@ pub mod unsync {
     #[cfg(feature = "std")]
     impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
 
-    impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
+    impl<T: fmt::Debug, F> fmt::Debug for Lazy<T, F> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             f.debug_struct("Lazy").field("cell", &self.cell).field("init", &"..").finish()
         }
@@ -866,7 +866,7 @@ pub mod sync {
         init: Cell<Option<F>>,
     }
 
-    impl<T: fmt::Debug, F: fmt::Debug> fmt::Debug for Lazy<T, F> {
+    impl<T: fmt::Debug, F> fmt::Debug for Lazy<T, F> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             f.debug_struct("Lazy").field("cell", &self.cell).field("init", &"..").finish()
         }
