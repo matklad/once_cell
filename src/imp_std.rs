@@ -315,10 +315,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_pointer_width = "64")]
     fn test_size() {
         use std::mem::size_of;
 
-        assert_eq!(size_of::<OnceCell<u32>>(), 4 * size_of::<u32>());
+        assert_eq!(size_of::<OnceCell<&usize>>(), 2 * size_of::<usize>());
     }
 }

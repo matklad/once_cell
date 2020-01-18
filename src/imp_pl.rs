@@ -95,9 +95,8 @@ impl Drop for MutexGuard<'_> {
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")]
 fn test_size() {
     use std::mem::size_of;
 
-    assert_eq!(size_of::<OnceCell<u32>>(), 3 * size_of::<u32>());
+    assert_eq!(size_of::<OnceCell<bool>>(), 3 * size_of::<u8>());
 }
