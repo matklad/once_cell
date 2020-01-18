@@ -233,6 +233,8 @@ mod imp;
 #[path = "imp_std.rs"]
 mod imp;
 
+mod maybe_uninit;
+
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
@@ -568,14 +570,15 @@ pub mod unsync {
 #[cfg(feature = "std")]
 pub mod sync {
     use std::{
-        cell::Cell,
+        cell::{Cell, UnsafeCell},
         fmt,
-        hint::unreachable_unchecked,
+        mem::{self, ManuallyDrop},
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
 
     use crate::imp::OnceCell as Imp;
+    use crate::maybe_uninit::MaybeUninit;
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -622,6 +625,12 @@ pub mod sync {
         }
     }
 
+    impl<T> Drop for OnceCell<T> {
+        fn drop(&mut self) {
+            self.take_inner();
+        }
+    }
+
     impl<T: Clone> Clone for OnceCell<T> {
         fn clone(&self) -> OnceCell<T> {
             let res = OnceCell::new();
@@ -662,20 +671,22 @@ pub mod sync {
         /// Returns `None` if the cell is empty, or being initialized. This
         /// method never blocks.
         pub fn get(&self) -> Option<&T> {
-            if self.0.is_initialized() {
-                // Safe b/c checked is_initialize
-                Some(unsafe { self.get_unchecked() })
-            } else {
-                None
-            }
+            self.0.sync_get()
         }
 
         /// Gets the mutable reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
         pub fn get_mut(&mut self) -> Option<&mut T> {
-            // Safe b/c we have a unique access.
-            unsafe { &mut *self.0.value.get() }.as_mut()
+            // Safe because we have a unique access.
+            // We don't need to do any synchronization. Either we did the initialization ourselves,
+            // or whatever mechanism send us the unique reference from another thread took care of
+            // synchronization.
+            if self.0.is_initialized() {
+                Some(unsafe { &mut *(*self.0.value.get()).as_mut_ptr() })
+            } else {
+                None
+            }
         }
 
         /// Get the reference to the underlying value, without checking if the
@@ -687,15 +698,8 @@ pub mod sync {
         /// the contents are acquired by (synchronized to) this thread.
         pub unsafe fn get_unchecked(&self) -> &T {
             debug_assert!(self.0.is_initialized());
-            let slot: &Option<T> = &*self.0.value.get();
-            match slot {
-                Some(value) => value,
-                // This unsafe does improve performance, see `examples/bench`.
-                None => {
-                    debug_assert!(false);
-                    unreachable_unchecked()
-                }
-            }
+            let slot: &MaybeUninit<T> = &*self.0.value.get();
+            &*slot.as_ptr()
         }
 
         /// Sets the contents of this cell to `value`.
@@ -800,11 +804,7 @@ pub mod sync {
             if let Some(value) = self.get() {
                 return Ok(value);
             }
-            self.0.initialize(f)?;
-
-            // Safe b/c called initialize
-            debug_assert!(self.0.is_initialized());
-            Ok(unsafe { self.get_unchecked() })
+            self.0.initialize(f)
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
@@ -822,10 +822,28 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
-        pub fn into_inner(self) -> Option<T> {
-            // Because `into_inner` takes `self` by value, the compiler statically verifies
-            // that it is not currently borrowed. So it is safe to move out `Option<T>`.
-            self.0.value.into_inner()
+        pub fn into_inner(mut self) -> Option<T> {
+            let res = self.take_inner();
+            // Don't drop this `OnceCell`. We just moved out one of the fields, but didn't set
+            // the state to uninitialized.
+            ManuallyDrop::new(self);
+            res
+        }
+
+        /// Takes the wrapped value out of a `OnceCell`.
+        /// Afterwards the cell is no longer initialized, and must be free'd WITHOUT dropping.
+        /// Only used by `into_inner` and `drop`.
+        fn take_inner(&mut self) -> Option<T> {
+            // The mutable reference guarantees there are no other threads that can observe us
+            // taking out the wrapped value.
+            // Right after this function `self` is supposed to be freed, so it makes little sense
+            // to atomically set the state to uninitialized.
+            if self.0.is_initialized() {
+                let value = mem::replace(&mut self.0.value, UnsafeCell::new(MaybeUninit::uninit()));
+                Some(unsafe { value.into_inner().assume_init() })
+            } else {
+                None
+            }
         }
     }
 
@@ -863,6 +881,7 @@ pub mod sync {
     /// ```
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
+        // FIXME: replace with MaybeUninit
         init: Cell<Option<F>>,
     }
 

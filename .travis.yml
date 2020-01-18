@@ -32,6 +32,11 @@ matrix:
     script:
     - cargo build --no-default-features --test test
 
+  - rust: stable
+    script:
+    - cargo test --no-default-features --features "std maybe_uninit"
+    - cargo test --no-default-features --features "std maybe_uninit parking_lot"
+
   - rust: 1.31.1
     script:
     - mv Cargo.lock.min Cargo.lock

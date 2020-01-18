@@ -3,13 +3,14 @@ use std::{
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicBool, Ordering},
 };
+use crate::maybe_uninit::MaybeUninit;
 
 use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
     is_initialized: AtomicBool,
-    pub(crate) value: UnsafeCell<Option<T>>,
+    pub(crate) value: UnsafeCell<MaybeUninit<T>>,
 }
 
 // Why do we need `T: Send`?
@@ -28,20 +29,33 @@ impl<T> OnceCell<T> {
         OnceCell {
             mutex: Mutex::new(),
             is_initialized: AtomicBool::new(false),
-            value: UnsafeCell::new(None),
+            value: UnsafeCell::new(MaybeUninit::uninit()),
         }
+    }
+
+    /// Safety: does no synchronization, only checks whether the `OnceCell` is initialized.
+    #[inline]
+    pub(crate) fn is_initialized(&self) -> bool {
+        self.is_initialized.load(Ordering::Relaxed)
     }
 
     /// Safety: synchronizes with store to value via Release/Acquire.
     #[inline]
-    pub(crate) fn is_initialized(&self) -> bool {
-        self.is_initialized.load(Ordering::Acquire)
+    pub(crate) fn sync_get(&self) -> Option<&T> {
+        if self.is_initialized.load(Ordering::Acquire) {
+            unsafe {
+                let slot: &MaybeUninit<T> = &*self.value.get();
+                Some(&*slot.as_ptr())
+            }
+        } else {
+            None
+        }
     }
 
     /// Safety: synchronizes with store to value via `is_initialized` or mutex
     /// lock/unlock, writes value only once because of the mutex.
     #[cold]
-    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
+    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
     {
@@ -56,12 +70,19 @@ impl<T> OnceCell<T> {
             // - finally, if it returns Ok, we store the value and store the flag with
             //   `Release`, which synchronizes with `Acquire`s.
             let value = f()?;
-            let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
-            debug_assert!(slot.is_none());
-            *slot = Some(value);
+            unsafe {
+                let slot: &mut MaybeUninit<T> = &mut *self.value.get();
+                // FIXME: replace with `slot.as_mut_ptr().write(value)`
+                slot.write(value);
+            }
             self.is_initialized.store(true, Ordering::Release);
         }
-        Ok(())
+        unsafe {
+            let _acquire = self.is_initialized.load(Ordering::Acquire);
+            debug_assert!(_acquire);
+            let slot: &MaybeUninit<T> = &*self.value.get();
+            Ok(&*slot.as_ptr())
+        }
     }
 }
 
@@ -92,9 +113,8 @@ impl Drop for MutexGuard<'_> {
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")]
 fn test_size() {
     use std::mem::size_of;
 
-    assert_eq!(size_of::<OnceCell<u32>>(), 3 * size_of::<u32>());
+    assert_eq!(size_of::<OnceCell<bool>>(), 3 * size_of::<u8>());
 }

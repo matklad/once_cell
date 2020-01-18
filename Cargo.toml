@@ -30,6 +30,8 @@ regex =  "1.2.0"
 default = ["std"]
 # Enables `once_cell::sync` module.
 std = []
+# Use `MaybeUninit` in the `sync` module.
+maybe_uninit = []
 
 [[example]]
 name = "bench"
