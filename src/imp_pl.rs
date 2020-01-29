@@ -1,5 +1,6 @@
 use std::{
     cell::UnsafeCell,
+    hint::unreachable_unchecked,
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -9,7 +10,7 @@ use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
 pub(crate) struct OnceCell<T> {
     mutex: Mutex,
     is_initialized: AtomicBool,
-    pub(crate) value: UnsafeCell<Option<T>>,
+    value: UnsafeCell<Option<T>>,
 }
 
 // Why do we need `T: Send`?
@@ -62,6 +63,43 @@ impl<T> OnceCell<T> {
             self.is_initialized.store(true, Ordering::Release);
         }
         Ok(())
+    }
+
+    /// Get the reference to the underlying value, without checking if the cell
+    /// is initialized.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the cell is in initialized state, and that
+    /// the contents are acquired by (synchronized to) this thread.
+    pub(crate) unsafe fn get_unchecked(&self) -> &T {
+        debug_assert!(self.is_initialized());
+        let slot: &Option<T> = &*self.value.get();
+        match slot {
+            Some(value) => value,
+            // This unsafe does improve performance, see `examples/bench`.
+            None => {
+                debug_assert!(false);
+                unreachable_unchecked()
+            }
+        }
+    }
+
+    /// Gets the mutable reference to the underlying value.
+    /// Returns `None` if the cell is empty.
+    pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
+        // Safe b/c we have a unique access.
+        unsafe { &mut *self.value.get() }.as_mut()
+    }
+
+    /// Consumes this `OnceCell`, returning the wrapped value.
+    /// Returns `None` if the cell was empty.
+    #[inline]
+    pub(crate) fn into_inner(self) -> Option<T> {
+        // Because `into_inner` takes `self` by value, the compiler statically
+        // verifies that it is not currently borrowed.
+        // So, it is safe to move out `Option<T>`.
+        self.value.into_inner()
     }
 }
 
