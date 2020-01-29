@@ -170,7 +170,8 @@ equivalents with `RefCell` and `Mutex`.
 
 # Minimum Supported `rustc` Version
 
-This crate's minimum supported `rustc` version is `1.31.1`.
+This crate's minimum supported `rustc` version is `1.31.1` (or `1.36.0` with
+`parking_lot` feature enabled).
 
 If only `std` feature is enabled, MSRV will be updated conservatively.
 When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.
