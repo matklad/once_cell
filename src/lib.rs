@@ -673,7 +673,6 @@ pub mod sync {
         /// Gets the mutable reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
-        #[inline]
         pub fn get_mut(&mut self) -> Option<&mut T> {
             self.0.get_mut()
         }
@@ -685,7 +684,6 @@ pub mod sync {
         ///
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
-        #[inline]
         pub unsafe fn get_unchecked(&self) -> &T {
             self.0.get_unchecked()
         }
@@ -814,7 +812,6 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
-        #[inline]
         pub fn into_inner(self) -> Option<T> {
             self.0.into_inner()
         }
