@@ -2,6 +2,7 @@ use std::{
     cell::UnsafeCell,
     mem::{self, MaybeUninit},
     panic::{RefUnwindSafe, UnwindSafe},
+    ptr,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -30,6 +31,20 @@ impl<T> OnceCell<T> {
             mutex: Mutex::new(),
             is_initialized: AtomicBool::new(false),
             value: UnsafeCell::new(MaybeUninit::uninit()),
+        }
+    }
+
+    fn as_ptr(&self) -> *const T {
+        unsafe {
+            let slot: &MaybeUninit<T> = &*self.value.get();
+            slot.as_ptr()
+        }
+    }
+
+    fn as_mut_ptr(&self) -> *mut T {
+        unsafe {
+            let slot: &mut MaybeUninit<T> = &mut *self.value.get();
+            slot.as_mut_ptr()
         }
     }
 
@@ -74,8 +89,7 @@ impl<T> OnceCell<T> {
     /// the contents are acquired by (synchronized to) this thread.
     pub(crate) unsafe fn get_unchecked(&self) -> &T {
         debug_assert!(self.is_initialized());
-        let slot: &MaybeUninit<T> = &*self.value.get();
-        &*slot.as_ptr()
+        &*self.as_ptr()
     }
 
     /// Gets the mutable reference to the underlying value.
@@ -83,10 +97,7 @@ impl<T> OnceCell<T> {
     pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
         if self.is_initialized() {
             // Safe b/c we have a unique access and value is initialized.
-            unsafe {
-                let slot: &mut MaybeUninit<T> = &mut *self.value.get();
-                Some(&mut *slot.as_mut_ptr())
-            }
+            Some(unsafe { &mut *self.as_mut_ptr() })
         } else {
             None
         }
@@ -94,56 +105,28 @@ impl<T> OnceCell<T> {
 
     /// Consumes this `OnceCell`, returning the wrapped value.
     /// Returns `None` if the cell was empty.
-    pub(crate) fn into_inner(mut self) -> Option<T> {
-        // Because `into_inner` takes `self` by value, the compiler statically
-        // verifies that it is not currently borrowed.
-        // So, it is safe to move out `Option<T>`.
-        //
-        // Safe b/c marking this `OnceCell` as uninitialized below.
-        let value = unsafe { self.take_inner() };
-        if value.is_some() {
-            // `Relaxed` is OK here, because `self` is taking by value, so no
-            // concurrent operations are possible.
-            self.is_initialized.store(false, Ordering::Relaxed);
+    pub(crate) fn into_inner(self) -> Option<T> {
+        if !self.is_initialized() {
+            return None;
         }
-        value
-    }
 
-    /// Takes the wrapped value out of this `OnceCell`.
-    ///
-    /// # Safety
-    ///
-    /// After moving out contained value this `OnceCell` will contain
-    /// uninitialized memory while still being considered as initialized,
-    /// so subsequent calls will cause UB (reading uninitialized memory).
-    ///
-    /// It's up to the caller to guarantee that the `OnceCell` is marked
-    /// as uninitialized in case this function returns `Some(value)`
-    /// and subsequent calls will be performed.
-    ///
-    /// The reason we're not marking this `OnceCell` as uninitialized inside
-    /// this function is to avoid redundant performance penalties on regular
-    /// drops.
-    ///
-    /// Only used by `into_inner` and `drop`.
-    unsafe fn take_inner(&mut self) -> Option<T> {
-        // The mutable reference guarantees there are no other threads observing
-        // us taking out the contained value.
-        // Right after this function `self` is supposed to be freed, so it makes
-        // little sense to atomically set the state to uninitialized.
-        if self.is_initialized() {
-            let value = mem::replace(&mut self.value, UnsafeCell::new(MaybeUninit::uninit()));
-            Some(value.into_inner().assume_init())
-        } else {
-            None
-        }
+        // Safe b/c we have a unique access and value is initialized.
+        let value: T = unsafe { ptr::read(self.as_ptr()) };
+
+        // It's OK to `mem::forget` without dropping, because both `self.mutex`
+        // and `self.is_initialized` are not heap-allocated.
+        mem::forget(self);
+
+        Some(value)
     }
 }
 
 impl<T> Drop for OnceCell<T> {
     fn drop(&mut self) {
-        // Safe b/c there is no subsequent `take_inner` calls.
-        unsafe { self.take_inner() };
+        if self.is_initialized() {
+            // Safe b/c we have a unique access and value is initialized.
+            unsafe { ptr::drop_in_place(self.as_mut_ptr()) };
+        }
     }
 }
 
