@@ -170,7 +170,8 @@ equivalents with `RefCell` and `Mutex`.
 
 # Minimum Supported `rustc` Version
 
-This crate's minimum supported `rustc` version is `1.31.1`.
+This crate's minimum supported `rustc` version is `1.31.1` (or `1.36.0` with
+`parking_lot` feature enabled).
 
 If only `std` feature is enabled, MSRV will be updated conservatively.
 When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.
@@ -570,7 +571,6 @@ pub mod sync {
     use std::{
         cell::Cell,
         fmt,
-        hint::unreachable_unchecked,
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
@@ -663,7 +663,7 @@ pub mod sync {
         /// method never blocks.
         pub fn get(&self) -> Option<&T> {
             if self.0.is_initialized() {
-                // Safe b/c checked is_initialize
+                // Safe b/c value is initialized.
                 Some(unsafe { self.get_unchecked() })
             } else {
                 None
@@ -674,28 +674,18 @@ pub mod sync {
         ///
         /// Returns `None` if the cell is empty.
         pub fn get_mut(&mut self) -> Option<&mut T> {
-            // Safe b/c we have a unique access.
-            unsafe { &mut *self.0.value.get() }.as_mut()
+            self.0.get_mut()
         }
 
         /// Get the reference to the underlying value, without checking if the
         /// cell is initialized.
         ///
-        /// Safety:
+        /// # Safety
         ///
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
         pub unsafe fn get_unchecked(&self) -> &T {
-            debug_assert!(self.0.is_initialized());
-            let slot: &Option<T> = &*self.0.value.get();
-            match slot {
-                Some(value) => value,
-                // This unsafe does improve performance, see `examples/bench`.
-                None => {
-                    debug_assert!(false);
-                    unreachable_unchecked()
-                }
-            }
+            self.0.get_unchecked()
         }
 
         /// Sets the contents of this cell to `value`.
@@ -802,7 +792,7 @@ pub mod sync {
             }
             self.0.initialize(f)?;
 
-            // Safe b/c called initialize
+            // Safe b/c value is initialized.
             debug_assert!(self.0.is_initialized());
             Ok(unsafe { self.get_unchecked() })
         }
@@ -823,9 +813,7 @@ pub mod sync {
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
         pub fn into_inner(self) -> Option<T> {
-            // Because `into_inner` takes `self` by value, the compiler statically verifies
-            // that it is not currently borrowed. So it is safe to move out `Option<T>`.
-            self.0.value.into_inner()
+            self.0.into_inner()
         }
     }
 
