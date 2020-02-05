@@ -659,15 +659,9 @@ pub mod sync {
 
         /// Gets the reference to the underlying value.
         ///
-        /// Returns `None` if the cell is empty, or being initialized. This
-        /// method never blocks.
+        /// Returns `None` if the cell is empty, or being initialized.
         pub fn get(&self) -> Option<&T> {
-            if self.0.is_initialized() {
-                // Safe b/c value is initialized.
-                Some(unsafe { self.get_unchecked() })
-            } else {
-                None
-            }
+            self.get_or_try_init(|| Err(())).ok()
         }
 
         /// Gets the mutable reference to the underlying value.
@@ -787,9 +781,11 @@ pub mod sync {
             F: FnOnce() -> Result<T, E>,
         {
             // Fast path check
-            if let Some(value) = self.get() {
-                return Ok(value);
+            if self.0.is_initialized() {
+                // Safe b/c value is initialized.
+                return Ok(unsafe { self.get_unchecked() });
             }
+
             self.0.initialize(f)?;
 
             // Safe b/c value is initialized.

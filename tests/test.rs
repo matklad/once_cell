@@ -553,25 +553,19 @@ mod sync {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // miri doesn't support Barrier
-    fn get_does_not_block() {
-        use std::sync::Barrier;
+    #[cfg_attr(miri, ignore)]
+    fn get_blocks() {
+        static CELL: OnceCell<u32> = OnceCell::new();
 
-        let cell = OnceCell::new();
-        let barrier = Barrier::new(2);
-        scope(|scope| {
-            scope.spawn(|_| {
-                cell.get_or_init(|| {
-                    barrier.wait();
-                    barrier.wait();
-                    "hello".to_string()
-                });
-            });
-            barrier.wait();
-            assert_eq!(cell.get(), None);
-            barrier.wait();
-        })
-        .unwrap();
-        assert_eq!(cell.get(), Some(&"hello".to_string()));
+        let mut thread = None;
+
+        let res = *CELL.get_or_init(|| {
+            thread = Some(std::thread::spawn(|| assert_eq!(CELL.get(), Some(&92))));
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            92
+        });
+        assert_eq!(res, 92);
+
+        thread.unwrap().join().unwrap();
     }
 }
