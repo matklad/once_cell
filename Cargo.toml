@@ -23,7 +23,7 @@ parking_lot = { version = "0.10.0", optional = true, default_features = false }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
-crossbeam-utils = "0.6.0"
+crossbeam-utils = "0.7.2"
 regex =  "1.2.0"
 
 [features]
