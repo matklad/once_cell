@@ -246,7 +246,7 @@ mod imp;
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
-        fmt,
+        fmt, mem,
         ops::{Deref, DerefMut},
     };
 
@@ -455,6 +455,29 @@ pub mod unsync {
             Ok(self.get().unwrap())
         }
 
+        /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
+        ///
+        /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
+        ///
+        /// Safety is guaranteed by requiring a mutable reference.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<String> = OnceCell::new();
+        /// assert_eq!(cell.take(), None);
+        ///
+        /// let mut cell = OnceCell::new();
+        /// cell.set("hello".to_string()).unwrap();
+        /// assert_eq!(cell.take(), Some("hello".to_string()));
+        /// assert_eq!(cell.get(), None);
+        /// ```
+        pub fn take(&mut self) -> Option<T> {
+            mem::take(self).into_inner()
+        }
+
         /// Consumes the `OnceCell`, returning the wrapped value.
         ///
         /// Returns `None` if the cell was empty.
@@ -581,7 +604,7 @@ pub mod unsync {
 pub mod sync {
     use std::{
         cell::Cell,
-        fmt,
+        fmt, mem,
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
@@ -807,6 +830,29 @@ pub mod sync {
             // Safe b/c value is initialized.
             debug_assert!(self.0.is_initialized());
             Ok(unsafe { self.get_unchecked() })
+        }
+
+        /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
+        ///
+        /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
+        ///
+        /// Safety is guaranteed by requiring a mutable reference.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<String> = OnceCell::new();
+        /// assert_eq!(cell.take(), None);
+        ///
+        /// let mut cell = OnceCell::new();
+        /// cell.set("hello".to_string()).unwrap();
+        /// assert_eq!(cell.take(), Some("hello".to_string()));
+        /// assert_eq!(cell.get(), None);
+        /// ```
+        pub fn take(&mut self) -> Option<T> {
+            mem::take(self).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
