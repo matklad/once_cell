@@ -459,8 +459,6 @@ pub mod unsync {
         ///
         /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
         ///
-        /// Safety is guaranteed by requiring a mutable reference.
-        ///
         /// # Examples
         ///
         /// ```
@@ -475,7 +473,7 @@ pub mod unsync {
         /// assert_eq!(cell.get(), None);
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::take(self).into_inner()
+            mem::replace(self, Self::default()).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value.
@@ -836,8 +834,6 @@ pub mod sync {
         ///
         /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
         ///
-        /// Safety is guaranteed by requiring a mutable reference.
-        ///
         /// # Examples
         ///
         /// ```
@@ -852,7 +848,7 @@ pub mod sync {
         /// assert_eq!(cell.get(), None);
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::take(self).into_inner()
+            mem::replace(self, Self::default()).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
