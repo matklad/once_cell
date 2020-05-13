@@ -459,8 +459,6 @@ pub mod unsync {
         ///
         /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
         ///
-        /// Safety is guaranteed by requiring a mutable reference.
-        ///
         /// # Examples
         ///
         /// ```
@@ -835,8 +833,6 @@ pub mod sync {
         /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
         ///
         /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
-        ///
-        /// Safety is guaranteed by requiring a mutable reference.
         ///
         /// # Examples
         ///
