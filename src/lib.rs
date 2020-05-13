@@ -475,7 +475,7 @@ pub mod unsync {
         /// assert_eq!(cell.get(), None);
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::take(self).into_inner()
+            mem::replace(self, Self::default()).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value.
@@ -852,7 +852,7 @@ pub mod sync {
         /// assert_eq!(cell.get(), None);
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::take(self).into_inner()
+            mem::replace(self, Self::default()).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
