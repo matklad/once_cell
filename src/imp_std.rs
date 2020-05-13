@@ -91,16 +91,16 @@ impl<T> OnceCell<T> {
     {
         let mut f = Some(f);
         let mut res: Result<(), E> = Ok(());
-        let slot = &self.value;
+        let slot: *mut Option<T> = self.value.get();
         initialize_inner(&self.state_and_queue, &mut || {
             let f = f.take().unwrap();
             match f() {
                 Ok(value) => {
-                    unsafe { *slot.get() = Some(value) };
+                    unsafe { *slot = Some(value) };
                     true
                 }
-                Err(e) => {
-                    res = Err(e);
+                Err(err) => {
+                    res = Err(err);
                     false
                 }
             }

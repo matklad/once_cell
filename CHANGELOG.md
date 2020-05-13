@@ -4,6 +4,7 @@
 
 - upgrade `parking_lot` to `0.10` (note that this bumps MSRV with `parking_lot` feature enabled to `1.36.0`).
 - Add `OnceCell::take`.
+- Upgrade crossbeam utils (private dependency) to `0.7`
 
 ## 1.3.1
 

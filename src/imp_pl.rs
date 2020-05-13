@@ -34,20 +34,6 @@ impl<T> OnceCell<T> {
         }
     }
 
-    fn as_ptr(&self) -> *const T {
-        unsafe {
-            let slot: &MaybeUninit<T> = &*self.value.get();
-            slot.as_ptr()
-        }
-    }
-
-    fn as_mut_ptr(&self) -> *mut T {
-        unsafe {
-            let slot: &mut MaybeUninit<T> = &mut *self.value.get();
-            slot.as_mut_ptr()
-        }
-    }
-
     /// Safety: synchronizes with store to value via Release/Acquire.
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {
@@ -74,7 +60,7 @@ impl<T> OnceCell<T> {
             let value = f()?;
             // Safe b/c we have a unique access and no panic may happen
             // until the cell is marked as initialized.
-            unsafe { self.value.get().write(MaybeUninit::new(value)) };
+            unsafe { self.as_mut_ptr().write(value) };
             self.is_initialized.store(true, Ordering::Release);
         }
         Ok(())
@@ -118,6 +104,20 @@ impl<T> OnceCell<T> {
         mem::forget(self);
 
         Some(value)
+    }
+
+    fn as_ptr(&self) -> *const T {
+        unsafe {
+            let slot: &MaybeUninit<T> = &*self.value.get();
+            slot.as_ptr()
+        }
+    }
+
+    fn as_mut_ptr(&self) -> *mut T {
+        unsafe {
+            let slot: &mut MaybeUninit<T> = &mut *self.value.get();
+            slot.as_mut_ptr()
+        }
     }
 }
 
