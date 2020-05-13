@@ -1,8 +1,9 @@
 # Changelog
 
-## 1.4.0
+## 1.4.0 (unreleased)
 
 - upgrade `parking_lot` to `0.10` (note that this bumps MSRV with `parking_lot` feature enabled to `1.36.0`).
+- Add `OnceCell::take`.
 
 ## 1.3.1
 
