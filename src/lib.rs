@@ -243,6 +243,9 @@ mod imp;
 #[path = "imp_std.rs"]
 mod imp;
 
+#[cfg(feature = "serde")]
+mod serde_impl;
+
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
