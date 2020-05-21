@@ -3,7 +3,7 @@
 
 `once_cell` provides two new cell-like types, [`unsync::OnceCell`] and [`sync::OnceCell`]. A `OnceCell`
 might store arbitrary non-`Copy` types, can be assigned to at most once and provides direct access
-to the stored contents. In a nutshell, the API looks *roughly* like this:
+to the stored contents. The core API looks *roughly* like this (and there's much more inside, read on!):
 
 ```rust,ignore
 impl<T> OnceCell<T> {
