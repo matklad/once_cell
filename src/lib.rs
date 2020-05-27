@@ -954,6 +954,22 @@ pub mod sync {
                 None => panic!("Lazy instance has previously been poisoned"),
             })
         }
+
+        /// Forces the evaluation of this lazy value and
+        /// returns the result.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::Lazy;
+        ///
+        /// let lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(lazy.into_inner(), 92);
+        /// ```
+        pub fn into_inner(self) -> T {
+            Lazy::force(&self);
+            self.cell.into_inner().unwrap()
+        }
     }
 
     impl<T, F: FnOnce() -> T> Deref for Lazy<T, F> {
