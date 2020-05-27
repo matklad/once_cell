@@ -20,7 +20,7 @@ or `MutexGuard<T>`.
 The `sync` flavor is thread-safe (that is, implements the [`Sync`] trait), while the `unsync` one is not.
 
 [`unsync::OnceCell`]: unsync/struct.OnceCell.html
-[`sync::OnceCell`]: sync/struct.ONceCell.html
+[`sync::OnceCell`]: sync/struct.OnceCell.html
 [`RefCell`]: https://doc.rust-lang.org/std/cell/struct.RefCell.html
 [`Mutex`]: https://doc.rust-lang.org/std/sync/struct.Mutex.html
 [`Sync`]: https://doc.rust-lang.org/std/marker/trait.Sync.html
