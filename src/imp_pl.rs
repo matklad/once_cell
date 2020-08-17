@@ -6,10 +6,10 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use parking_lot::{lock_api::RawMutex as _RawMutex, RawMutex};
+use parking_lot::Mutex;
 
 pub(crate) struct OnceCell<T> {
-    mutex: Mutex,
+    mutex: Mutex<()>,
     is_initialized: AtomicBool,
     value: UnsafeCell<MaybeUninit<T>>,
 }
@@ -28,7 +28,7 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
-            mutex: Mutex::new(),
+            mutex: parking_lot::const_mutex(()),
             is_initialized: AtomicBool::new(false),
             value: UnsafeCell::new(MaybeUninit::uninit()),
         }
@@ -127,32 +127,6 @@ impl<T> Drop for OnceCell<T> {
             // Safe b/c we have a unique access and value is initialized.
             unsafe { ptr::drop_in_place(self.as_mut_ptr()) };
         }
-    }
-}
-
-/// Wrapper around parking_lot's `RawMutex` which has `const fn` new.
-struct Mutex {
-    inner: RawMutex,
-}
-
-impl Mutex {
-    const fn new() -> Mutex {
-        Mutex { inner: RawMutex::INIT }
-    }
-
-    fn lock(&self) -> MutexGuard<'_> {
-        self.inner.lock();
-        MutexGuard { inner: &self.inner }
-    }
-}
-
-struct MutexGuard<'a> {
-    inner: &'a RawMutex,
-}
-
-impl Drop for MutexGuard<'_> {
-    fn drop(&mut self) {
-        self.inner.unlock();
     }
 }
 
