@@ -202,32 +202,9 @@ mod unsync {
 mod sync {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
+    use crossbeam_utils::thread::scope;
+
     use once_cell::sync::{Lazy, OnceCell};
-
-    #[cfg(not(miri))] // miri doesn't support threads
-    mod scope {
-        pub(super) use crossbeam_utils::thread::scope;
-    }
-
-    #[cfg(miri)] // "stub threads" for Miri
-    mod scope {
-        pub(super) struct Scope;
-
-        #[cfg(miri)]
-        impl Scope {
-            pub(super) fn spawn<R>(&self, f: impl FnOnce(()) -> R) -> R {
-                f(())
-            }
-        }
-
-        #[cfg(miri)]
-        pub(super) fn scope(f: impl FnOnce(&Scope)) -> Result<(), ()> {
-            f(&Scope);
-            Ok(())
-        }
-    }
-
-    use scope::scope;
 
     #[test]
     fn once_cell() {
