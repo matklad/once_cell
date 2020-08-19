@@ -257,7 +257,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // miri doesn't support threads
     fn stampede_once() {
         static O: OnceCell<()> = OnceCell::new();
         static mut RUN: bool = false;
@@ -315,7 +314,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // miri doesn't support threads
     fn wait_for_force_to_finish() {
         static O: OnceCell<()> = OnceCell::new();
 

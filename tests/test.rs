@@ -511,7 +511,7 @@ mod sync {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // deadlocks without real threads
+    #[cfg_attr(miri, ignore)] // FIXME: deadlocks, likely caused by https://github.com/rust-lang/miri/issues/1388
     fn once_cell_does_not_leak_partially_constructed_boxes() {
         let n_tries = 100;
         let n_readers = 10;
