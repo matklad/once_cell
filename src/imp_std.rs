@@ -46,12 +46,17 @@ const COMPLETE: usize = 0x2;
 // this is in the RUNNING state.
 const STATE_MASK: usize = 0x3;
 
+// Empty struct that is 4-byte aligned.
+#[repr(align(4))]
+struct Align4;
+
 // Representation of a node in the linked list of waiters in the RUNNING state.
-#[repr(align(4))] // Ensure the two lower bits are free to use as state bits.
 struct Waiter {
     thread: Cell<Option<Thread>>,
     signaled: AtomicBool,
     next: *const Waiter,
+    // Ensure the two lower bits are free to use as state bits.
+    _align4: Align4,
 }
 
 // Head of a linked list of waiters.
@@ -194,6 +199,7 @@ fn wait(state_and_queue: &AtomicUsize, mut current_state: usize) {
             thread: Cell::new(Some(thread::current())),
             signaled: AtomicBool::new(false),
             next: (current_state & !STATE_MASK) as *const Waiter,
+            _align4: Align4,
         };
         let me = &node as *const Waiter as usize;
 
