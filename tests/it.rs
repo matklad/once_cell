@@ -570,3 +570,216 @@ mod sync {
         }
     }
 }
+
+#[cfg(feature = "unstable")]
+mod race {
+    use std::{
+        num::NonZeroUsize,
+        sync::{
+            atomic::{AtomicUsize, Ordering::SeqCst},
+            Barrier,
+        },
+    };
+
+    use crossbeam_utils::thread::scope;
+
+    use once_cell::race::{OnceBool, OnceNonZeroUsize};
+
+    #[test]
+    fn once_non_zero_usize_smoke_test() {
+        let cnt = AtomicUsize::new(0);
+        let cell = OnceNonZeroUsize::new();
+        let val = NonZeroUsize::new(92).unwrap();
+        scope(|s| {
+            s.spawn(|_| {
+                assert_eq!(
+                    cell.get_or_init(|| {
+                        cnt.fetch_add(1, SeqCst);
+                        val
+                    }),
+                    val
+                );
+                assert_eq!(cnt.load(SeqCst), 1);
+
+                assert_eq!(
+                    cell.get_or_init(|| {
+                        cnt.fetch_add(1, SeqCst);
+                        val
+                    }),
+                    val
+                );
+                assert_eq!(cnt.load(SeqCst), 1);
+            });
+        })
+        .unwrap();
+        assert_eq!(cell.get(), Some(val));
+        assert_eq!(cnt.load(SeqCst), 1);
+    }
+
+    #[test]
+    fn once_non_zero_usize_first_wins() {
+        let cell = OnceNonZeroUsize::new();
+        let val1 = NonZeroUsize::new(92).unwrap();
+        let val2 = NonZeroUsize::new(62).unwrap();
+
+        let b1 = Barrier::new(2);
+        let b2 = Barrier::new(2);
+        let b3 = Barrier::new(2);
+        scope(|s| {
+            s.spawn(|_| {
+                let r1 = cell.get_or_init(|| {
+                    b1.wait();
+                    b2.wait();
+                    val1
+                });
+                assert_eq!(r1, val1);
+                b3.wait();
+            });
+            b1.wait();
+            s.spawn(|_| {
+                let r2 = cell.get_or_init(|| {
+                    b2.wait();
+                    b3.wait();
+                    val2
+                });
+                assert_eq!(r2, val1);
+            });
+        })
+        .unwrap();
+
+        assert_eq!(cell.get(), Some(val1));
+    }
+
+    #[test]
+    fn once_bool_smoke_test() {
+        let cnt = AtomicUsize::new(0);
+        let cell = OnceBool::new();
+        scope(|s| {
+            s.spawn(|_| {
+                assert_eq!(
+                    cell.get_or_init(|| {
+                        cnt.fetch_add(1, SeqCst);
+                        false
+                    }),
+                    false
+                );
+                assert_eq!(cnt.load(SeqCst), 1);
+
+                assert_eq!(
+                    cell.get_or_init(|| {
+                        cnt.fetch_add(1, SeqCst);
+                        false
+                    }),
+                    false
+                );
+                assert_eq!(cnt.load(SeqCst), 1);
+            });
+        })
+        .unwrap();
+        assert_eq!(cell.get(), Some(false));
+        assert_eq!(cnt.load(SeqCst), 1);
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn once_box_smoke_test() {
+        #[derive(Debug)]
+        struct Pebble {
+            id: usize,
+        }
+        static TOTAL: AtomicUsize = AtomicUsize::new(0);
+
+        impl Pebble {
+            fn total() -> usize {
+                TOTAL.load(SeqCst)
+            }
+            fn new() -> Pebble {
+                let id = TOTAL.fetch_add(1, SeqCst);
+                Pebble { id }
+            }
+        }
+        impl Drop for Pebble {
+            fn drop(&mut self) {
+                TOTAL.fetch_sub(1, SeqCst);
+            }
+        }
+
+        let global_cnt = AtomicUsize::new(0);
+        let cell = once_cell::race::OnceBox::new();
+        let b = Barrier::new(128);
+        scope(|s| {
+            for _ in 0..128 {
+                s.spawn(|_| {
+                    let local_cnt = AtomicUsize::new(0);
+                    cell.get_or_init(|| {
+                        global_cnt.fetch_add(1, SeqCst);
+                        local_cnt.fetch_add(1, SeqCst);
+                        b.wait();
+                        Pebble::new()
+                    });
+                    assert_eq!(local_cnt.load(SeqCst), 1);
+
+                    cell.get_or_init(|| {
+                        global_cnt.fetch_add(1, SeqCst);
+                        local_cnt.fetch_add(1, SeqCst);
+                        Pebble::new()
+                    });
+                    assert_eq!(local_cnt.load(SeqCst), 1);
+                });
+            }
+        })
+        .unwrap();
+        assert!(cell.get().is_some());
+        assert!(global_cnt.load(SeqCst) > 10);
+
+        assert_eq!(Pebble::total(), 1);
+        drop(cell);
+        assert_eq!(Pebble::total(), 0);
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn once_box_first_wins() {
+        let cell = once_cell::race::OnceBox::new();
+        let val1 = 92;
+        let val2 = 62;
+
+        let b1 = Barrier::new(2);
+        let b2 = Barrier::new(2);
+        let b3 = Barrier::new(2);
+        scope(|s| {
+            s.spawn(|_| {
+                let r1 = cell.get_or_init(|| {
+                    b1.wait();
+                    b2.wait();
+                    val1
+                });
+                assert_eq!(*r1, val1);
+                b3.wait();
+            });
+            b1.wait();
+            s.spawn(|_| {
+                let r2 = cell.get_or_init(|| {
+                    b2.wait();
+                    b3.wait();
+                    val2
+                });
+                assert_eq!(*r2, val1);
+            });
+        })
+        .unwrap();
+
+        assert_eq!(cell.get(), Some(&val1));
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn once_box_reentrant() {
+        let cell = once_cell::race::OnceBox::new();
+        let res = cell.get_or_init(|| {
+            cell.get_or_init(|| "hello".to_string());
+            "world".to_string()
+        });
+        assert_eq!(res, "hello");
+    }
+}

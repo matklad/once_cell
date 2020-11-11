@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+
+- add new `once_cell::race` module for "first one wins" no_std-compatible initialization flavor.
+  The API is provisional, subject to change and is gated by the `unstable` cargo feature.
+
 ## 1.4.1
 
 - upgrade `parking_lot` to `0.11.0`
