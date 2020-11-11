@@ -679,31 +679,40 @@ mod race {
         assert_eq!(cell.get(), Some(false));
         assert_eq!(cnt.load(SeqCst), 1);
     }
+}
+
+#[cfg(all(feature = "unstable", feature = "alloc"))]
+mod race_once_box {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering::SeqCst},
+        Barrier,
+    };
+
+    use crossbeam_utils::thread::scope;
+
+    #[derive(Debug)]
+    struct Pebble {
+        id: usize,
+    }
+    static TOTAL: AtomicUsize = AtomicUsize::new(0);
+
+    impl Pebble {
+        fn total() -> usize {
+            TOTAL.load(SeqCst)
+        }
+        fn new() -> Pebble {
+            let id = TOTAL.fetch_add(1, SeqCst);
+            Pebble { id }
+        }
+    }
+    impl Drop for Pebble {
+        fn drop(&mut self) {
+            TOTAL.fetch_sub(1, SeqCst);
+        }
+    }
 
     #[test]
-    #[cfg(feature = "alloc")]
     fn once_box_smoke_test() {
-        #[derive(Debug)]
-        struct Pebble {
-            id: usize,
-        }
-        static TOTAL: AtomicUsize = AtomicUsize::new(0);
-
-        impl Pebble {
-            fn total() -> usize {
-                TOTAL.load(SeqCst)
-            }
-            fn new() -> Pebble {
-                let id = TOTAL.fetch_add(1, SeqCst);
-                Pebble { id }
-            }
-        }
-        impl Drop for Pebble {
-            fn drop(&mut self) {
-                TOTAL.fetch_sub(1, SeqCst);
-            }
-        }
-
         let global_cnt = AtomicUsize::new(0);
         let cell = once_cell::race::OnceBox::new();
         let b = Barrier::new(128);
@@ -738,7 +747,6 @@ mod race {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
     fn once_box_first_wins() {
         let cell = once_cell::race::OnceBox::new();
         let val1 = 92;
@@ -773,7 +781,6 @@ mod race {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
     fn once_box_reentrant() {
         let cell = once_cell::race::OnceBox::new();
         let res = cell.get_or_init(|| {
