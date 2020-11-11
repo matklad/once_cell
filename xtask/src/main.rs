@@ -2,6 +2,8 @@ use std::env;
 
 use xaction::{cargo_toml, cmd, cp, git, push_rustup_toolchain, rm_rf, section, Result};
 
+const MSRV: &str = "1.36.0";
+
 fn main() {
     if let Err(err) = try_main() {
         eprintln!("error: {}", err);
@@ -30,8 +32,9 @@ fn try_main() -> Result<()> {
         // Skip doctests, they need `std`
         cmd!("cargo test --features unstable --no-default-features --test it").run()?;
 
-        cmd!("cargo test --features unstable --no-default-features --features 'std parking_lot'").run()?;
-        cmd!("cargo test --features unstable --no-default-features --features 'std parking_lot' --release").run()?;
+        cmd!("cargo test --features 'unstable std parking_lot' --no-default-features").run()?;
+        cmd!("cargo test --features 'unstable std parking_lot' --no-default-features --release")
+            .run()?;
     }
 
     {
@@ -43,7 +46,7 @@ fn try_main() -> Result<()> {
 
     {
         let _s = section("TEST_MSRV");
-        let _t = push_rustup_toolchain("1.31.1");
+        let _t = push_rustup_toolchain(MSRV);
         cp("Cargo.lock.min", "Cargo.lock")?;
         cmd!("cargo build").run()?;
     }
