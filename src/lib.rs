@@ -278,6 +278,7 @@ might be easier to debug than a deadlock.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "unstable")]
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
