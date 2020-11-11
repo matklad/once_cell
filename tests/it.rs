@@ -681,7 +681,7 @@ mod race {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn once_box_smoke_test() {
         #[derive(Debug)]
         struct Pebble {
@@ -738,7 +738,7 @@ mod race {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn once_box_first_wins() {
         let cell = once_cell::race::OnceBox::new();
         let val1 = 92;
@@ -773,7 +773,7 @@ mod race {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn once_box_reentrant() {
         let cell = once_cell::race::OnceBox::new();
         let res = cell.get_or_init(|| {
