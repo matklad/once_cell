@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1
+
+- MSRV is increased to `1.36.0`.
+- document `once_cell::race` module.
+- introduce `alloc` feature for `OnceBox`.
+- fix `OnceBox::set`.
+
 ## 1.5.0
 
 - add new `once_cell::race` module for "first one wins" no_std-compatible initialization flavor.
