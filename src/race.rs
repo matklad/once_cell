@@ -1,23 +1,38 @@
+//! "First one wins" flavor of `OnceCell`.
+//!
+//! If two threads race to initialize a type from the `race` module, they
+//! don't block, execute initialization function together, but only one of
+//! them stores the result.
+//!
+//! This module does not require `std` feature.
+
 use core::{
     num::NonZeroUsize,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+/// A thread-safe cell which can be written to only once.
 #[derive(Default, Debug)]
 pub struct OnceNonZeroUsize {
     inner: AtomicUsize,
 }
 
 impl OnceNonZeroUsize {
+    /// Creates a new empty cell.
     pub const fn new() -> OnceNonZeroUsize {
         OnceNonZeroUsize { inner: AtomicUsize::new(0) }
     }
 
+    /// Gets the underlying value.
     pub fn get(&self) -> Option<NonZeroUsize> {
         let val = self.inner.load(Ordering::Acquire);
         NonZeroUsize::new(val)
     }
 
+    /// Sets the contents of this cell to `value`.
+    ///
+    /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
+    /// full.
     pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
         let val = self.inner.compare_and_swap(0, value.get(), Ordering::AcqRel);
         if val == 0 {
@@ -27,6 +42,12 @@ impl OnceNonZeroUsize {
         }
     }
 
+    /// Gets the contents of the cell, initializing it with `f` if the cell was
+    /// empty.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
     pub fn get_or_init<F>(&self, f: F) -> NonZeroUsize
     where
         F: FnOnce() -> NonZeroUsize,
@@ -38,6 +59,13 @@ impl OnceNonZeroUsize {
         }
     }
 
+    /// Gets the contents of the cell, initializing it with `f` if
+    /// the cell was empty. If the cell was empty and `f` failed, an
+    /// error is returned.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<NonZeroUsize, E>
     where
         F: FnOnce() -> Result<NonZeroUsize, E>,
@@ -58,31 +86,37 @@ impl OnceNonZeroUsize {
     }
 }
 
+/// A thread-safe cell which can be written to only once.
 #[derive(Default, Debug)]
 pub struct OnceBool {
     inner: OnceNonZeroUsize,
 }
 
 impl OnceBool {
-    fn from_usize(value: NonZeroUsize) -> bool {
-        value.get() == 1
-    }
-    fn to_usize(value: bool) -> NonZeroUsize {
-        unsafe { NonZeroUsize::new_unchecked(if value { 1 } else { 2 }) }
-    }
-
+    /// Creates a new empty cell.
     pub const fn new() -> OnceBool {
         OnceBool { inner: OnceNonZeroUsize::new() }
     }
 
+    /// Gets the underlying value.
     pub fn get(&self) -> Option<bool> {
         self.inner.get().map(OnceBool::from_usize)
     }
 
+    /// Sets the contents of this cell to `value`.
+    ///
+    /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
+    /// full.
     pub fn set(&self, value: bool) -> Result<(), ()> {
         self.inner.set(OnceBool::to_usize(value))
     }
 
+    /// Gets the contents of the cell, initializing it with `f` if the cell was
+    /// empty.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
     pub fn get_or_init<F>(&self, f: F) -> bool
     where
         F: FnOnce() -> bool,
@@ -90,11 +124,25 @@ impl OnceBool {
         OnceBool::from_usize(self.inner.get_or_init(|| OnceBool::to_usize(f())))
     }
 
+    /// Gets the contents of the cell, initializing it with `f` if
+    /// the cell was empty. If the cell was empty and `f` failed, an
+    /// error is returned.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<bool, E>
     where
         F: FnOnce() -> Result<bool, E>,
     {
         self.inner.get_or_try_init(|| f().map(OnceBool::to_usize)).map(OnceBool::from_usize)
+    }
+
+    fn from_usize(value: NonZeroUsize) -> bool {
+        value.get() == 1
+    }
+    fn to_usize(value: bool) -> NonZeroUsize {
+        unsafe { NonZeroUsize::new_unchecked(if value { 1 } else { 2 }) }
     }
 }
 
@@ -109,6 +157,7 @@ mod once_box {
         sync::atomic::{AtomicPtr, Ordering},
     };
 
+    /// A thread-safe cell which can be written to only once.
     #[derive(Default, Debug)]
     pub struct OnceBox<T> {
         inner: AtomicPtr<T>,
@@ -125,10 +174,12 @@ mod once_box {
     }
 
     impl<T> OnceBox<T> {
+        /// Creates a new empty cell.
         pub const fn new() -> OnceBox<T> {
             OnceBox { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
         }
 
+        /// Gets a reference to the underlying value.
         pub fn get(&self) -> Option<&T> {
             let ptr = self.inner.load(Ordering::Acquire);
             if ptr.is_null() {
@@ -137,17 +188,26 @@ mod once_box {
             Some(unsafe { &*ptr })
         }
 
-        // Result<(), Box<T>> here?
-        pub fn set(&self, value: T) -> Result<(), ()> {
+        /// Sets the contents of this cell to `value`.
+        ///
+        /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// full.
+        pub fn set(&self, value: T) -> Result<(), T> {
             let ptr = Box::into_raw(Box::new(value));
             let old_ptr = self.inner.compare_and_swap(ptr::null_mut(), ptr, Ordering::AcqRel);
             if !old_ptr.is_null() {
-                drop(unsafe { Box::from_raw(ptr) });
-                return Err(());
+                let value = unsafe { *Box::from_raw(ptr) };
+                return Err(value);
             }
             Ok(())
         }
 
+        /// Gets the contents of the cell, initializing it with `f` if the cell was
+        /// empty.
+        ///
+        /// If several threads concurrently run `get_or_init`, more than one `f` can
+        /// be called. However, all threads will return the same value, produced by
+        /// some `f`.
         pub fn get_or_init<F>(&self, f: F) -> &T
         where
             F: FnOnce() -> T,
@@ -159,6 +219,13 @@ mod once_box {
             }
         }
 
+        /// Gets the contents of the cell, initializing it with `f` if
+        /// the cell was empty. If the cell was empty and `f` failed, an
+        /// error is returned.
+        ///
+        /// If several threads concurrently run `get_or_init`, more than one `f` can
+        /// be called. However, all threads will return the same value, produced by
+        /// some `f`.
         pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
         where
             F: FnOnce() -> Result<T, E>,

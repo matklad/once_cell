@@ -1043,12 +1043,5 @@ pub mod sync {
     fn _dummy() {}
 }
 
-/// "First one wins" flavor of `OnceCell`.
-///
-/// If two threads race to initialize a type from the `race` module, they
-/// don't block, execute initialization function together, but only one of
-/// them stores the result.
-///
-/// This module does not require `std` feature.
 #[cfg(feature = "unstable")]
 pub mod race;
