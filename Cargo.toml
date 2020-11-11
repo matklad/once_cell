@@ -15,6 +15,9 @@ categories = ["rust-patterns", "memory-management"]
 
 exclude = ["*.png", "*.svg", "/Cargo.lock.min", "/.travis.yml", "/run-miri-tests.sh", "rustfmt.toml"]
 
+[workspace]
+members = ["xtask"]
+
 [dependencies]
 # Uses parking_lot to implement once_cell::sync::OnceCell.
 # This makes not speed difference, but makes each OnceCell<T>
