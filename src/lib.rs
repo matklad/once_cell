@@ -273,6 +273,9 @@ might be easier to debug than a deadlock.
 * [mitochondria](https://crates.io/crates/mitochondria)
 * [lazy_static](https://crates.io/crates/lazy_static)
 
+Most of this crate's functionality is available in `std` in nightly Rust.
+See the [tracking issue](https://github.com/rust-lang/rust/issues/74465).
+
 */
 
 #![cfg_attr(not(feature = "std"), no_std)]
