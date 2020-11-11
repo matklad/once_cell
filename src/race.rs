@@ -140,7 +140,8 @@ mod once_box {
         // Result<(), Box<T>> here?
         pub fn set(&self, value: T) -> Result<(), ()> {
             let ptr = Box::into_raw(Box::new(value));
-            if ptr.is_null() {
+            let old_ptr = self.inner.compare_and_swap(ptr::null_mut(), ptr, Ordering::AcqRel);
+            if !old_ptr.is_null() {
                 drop(unsafe { Box::from_raw(ptr) });
                 return Err(());
             }
