@@ -278,6 +278,9 @@ might be easier to debug than a deadlock.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 #[cfg(feature = "std")]
 #[cfg(feature = "parking_lot")]
 #[path = "imp_pl.rs"]
@@ -1053,8 +1056,11 @@ pub mod race {
         num::NonZeroUsize,
         sync::atomic::{AtomicUsize, Ordering},
     };
-    #[cfg(feature = "std")]
-    use std::{marker::PhantomData, ptr, sync::atomic::AtomicPtr};
+
+    #[cfg(feature = "alloc")]
+    use alloc::boxed::Box;
+    #[cfg(feature = "alloc")]
+    use core::{marker::PhantomData, ptr, sync::atomic::AtomicPtr};
 
     #[derive(Default, Debug)]
     pub struct OnceNonZeroUsize {
@@ -1152,13 +1158,13 @@ pub mod race {
     }
 
     #[derive(Default, Debug)]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     pub struct OnceBox<T> {
         inner: AtomicPtr<T>,
         ghost: PhantomData<Option<Box<T>>>,
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     impl<T> Drop for OnceBox<T> {
         fn drop(&mut self) {
             let ptr = *self.inner.get_mut();
@@ -1168,7 +1174,7 @@ pub mod race {
         }
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     impl<T> OnceBox<T> {
         pub const fn new() -> OnceBox<T> {
             OnceBox { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
@@ -1229,6 +1235,6 @@ pub mod race {
     /// fn share<T: Sync>(_: &T) {}
     /// share(&once_cell::race::OnceBox::<S>::new());
     /// ```
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     unsafe impl<T: Sync + Send> Sync for OnceBox<T> {}
 }

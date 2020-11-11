@@ -32,7 +32,8 @@ regex =  "1.2.0"
 [features]
 default = ["std"]
 # Enables `once_cell::sync` module.
-std = []
+std = ["alloc"]
+alloc = []
 # Enables semver-exempt APIs of this crate
 unstable = []
 
