@@ -24,21 +24,21 @@ fn try_main() -> Result<()> {
     {
         let _s = section("TEST_STABLE");
         let _t = push_rustup_toolchain("stable");
-        cmd!("cargo test").run()?;
-        cmd!("cargo test --release").run()?;
+        cmd!("cargo test --features unstable").run()?;
+        cmd!("cargo test --features unstable --release").run()?;
 
         // Skip doctests, they need `std`
-        cmd!("cargo test --no-default-features --test it").run()?;
+        cmd!("cargo test --features unstable --no-default-features --test it").run()?;
 
-        cmd!("cargo test --no-default-features --features 'std parking_lot'").run()?;
-        cmd!("cargo test --no-default-features --features 'std parking_lot' --release").run()?;
+        cmd!("cargo test --features unstable --no-default-features --features 'std parking_lot'").run()?;
+        cmd!("cargo test --features unstable --no-default-features --features 'std parking_lot' --release").run()?;
     }
 
     {
         let _s = section("TEST_BETA");
         let _t = push_rustup_toolchain("beta");
-        cmd!("cargo test").run()?;
-        cmd!("cargo test --release").run()?;
+        cmd!("cargo test --features unstable").run()?;
+        cmd!("cargo test --features unstable --release").run()?;
     }
 
     {
@@ -57,7 +57,7 @@ fn try_main() -> Result<()> {
 
         cmd!("rustup component add miri").run()?;
         cmd!("cargo miri setup").run()?;
-        cmd!("cargo miri test").run()?;
+        cmd!("cargo miri test --features unstable").run()?;
     }
 
     let version = cargo_toml.version()?;
