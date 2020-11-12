@@ -196,8 +196,8 @@ mod once_box {
             let ptr = Box::into_raw(Box::new(value));
             let old_ptr = self.inner.compare_and_swap(ptr::null_mut(), ptr, Ordering::AcqRel);
             if !old_ptr.is_null() {
-                let value = unsafe { *Box::from_raw(ptr) };
-                return Err(value);
+                let value = unsafe { Box::from_raw(ptr) };
+                return Err(*value);
             }
             Ok(())
         }
