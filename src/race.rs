@@ -192,12 +192,12 @@ mod once_box {
         ///
         /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
         /// full.
-        pub fn set(&self, value: T) -> Result<(), T> {
-            let ptr = Box::into_raw(Box::new(value));
+        pub fn set(&self, value: Box<T>) -> Result<(), Box<T>> {
+            let ptr = Box::into_raw(value);
             let old_ptr = self.inner.compare_and_swap(ptr::null_mut(), ptr, Ordering::AcqRel);
             if !old_ptr.is_null() {
                 let value = unsafe { Box::from_raw(ptr) };
-                return Err(*value);
+                return Err(value);
             }
             Ok(())
         }
@@ -210,10 +210,10 @@ mod once_box {
         /// some `f`.
         pub fn get_or_init<F>(&self, f: F) -> &T
         where
-            F: FnOnce() -> T,
+            F: FnOnce() -> Box<T>,
         {
             enum Void {}
-            match self.get_or_try_init(|| Ok::<T, Void>(f())) {
+            match self.get_or_try_init(|| Ok::<Box<T>, Void>(f())) {
                 Ok(val) => val,
                 Err(void) => match void {},
             }
@@ -228,13 +228,13 @@ mod once_box {
         /// some `f`.
         pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
         where
-            F: FnOnce() -> Result<T, E>,
+            F: FnOnce() -> Result<Box<T>, E>,
         {
             let mut ptr = self.inner.load(Ordering::Acquire);
 
             if ptr.is_null() {
                 let val = f()?;
-                ptr = Box::into_raw(Box::new(val));
+                ptr = Box::into_raw(val);
                 let old_ptr = self.inner.compare_and_swap(ptr::null_mut(), ptr, Ordering::AcqRel);
                 if !old_ptr.is_null() {
                     drop(unsafe { Box::from_raw(ptr) });

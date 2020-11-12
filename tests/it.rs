@@ -758,14 +758,14 @@ mod race_once_box {
                         global_cnt.fetch_add(1, SeqCst);
                         local_cnt.fetch_add(1, SeqCst);
                         b.wait();
-                        heap.new_pebble(())
+                        Box::new(heap.new_pebble(()))
                     });
                     assert_eq!(local_cnt.load(SeqCst), 1);
 
                     cell.get_or_init(|| {
                         global_cnt.fetch_add(1, SeqCst);
                         local_cnt.fetch_add(1, SeqCst);
-                        heap.new_pebble(())
+                        Box::new(heap.new_pebble(()))
                     });
                     assert_eq!(local_cnt.load(SeqCst), 1);
                 });
@@ -786,11 +786,11 @@ mod race_once_box {
         let cell = OnceBox::new();
         assert!(cell.get().is_none());
 
-        assert!(cell.set(heap.new_pebble("hello")).is_ok());
+        assert!(cell.set(Box::new(heap.new_pebble("hello"))).is_ok());
         assert_eq!(cell.get().unwrap().val, "hello");
         assert_eq!(heap.total(), 1);
 
-        assert!(cell.set(heap.new_pebble("world")).is_err());
+        assert!(cell.set(Box::new(heap.new_pebble("world"))).is_err());
         assert_eq!(cell.get().unwrap().val, "hello");
         assert_eq!(heap.total(), 1);
 
@@ -812,7 +812,7 @@ mod race_once_box {
                 let r1 = cell.get_or_init(|| {
                     b1.wait();
                     b2.wait();
-                    val1
+                    Box::new(val1)
                 });
                 assert_eq!(*r1, val1);
                 b3.wait();
@@ -822,7 +822,7 @@ mod race_once_box {
                 let r2 = cell.get_or_init(|| {
                     b2.wait();
                     b3.wait();
-                    val2
+                    Box::new(val2)
                 });
                 assert_eq!(*r2, val1);
             });
@@ -836,8 +836,8 @@ mod race_once_box {
     fn once_box_reentrant() {
         let cell = OnceBox::new();
         let res = cell.get_or_init(|| {
-            cell.get_or_init(|| "hello".to_string());
-            "world".to_string()
+            cell.get_or_init(|| Box::new("hello".to_string()));
+            Box::new("world".to_string())
         });
         assert_eq!(res, "hello");
     }
