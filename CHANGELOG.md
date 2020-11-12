@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2
+
+- `OnceBox` API uses `Box<T>`.
+  This a breaking change to unstable API.
+
 ## 1.5.1
 
 - MSRV is increased to `1.36.0`.
