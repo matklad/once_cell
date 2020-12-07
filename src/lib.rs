@@ -233,10 +233,11 @@
 //! and [`lazy_cell`](https://github.com/indiv0/lazycell/) crates and [`std::sync::Once`]. In some sense,
 //! `once_cell` just streamlines and unifies those APIs.
 //!
-//! To implement a sync flavor of `OnceCell`, this crates uses either a custom re-implementation of
-//! `std::sync::Once` or `parking_lot::Mutex`. This is controlled by the `parking_lot` feature, which
-//! is enabled by default. Performance is the same for both cases, but the `parking_lot` based `OnceCell<T>`
-//! is smaller by up to 16 bytes.
+//! To implement a sync flavor of `OnceCell`, this crates uses either a custom
+//! re-implementation of `std::sync::Once` or `parking_lot::Mutex`. This is
+//! controlled by the `parking_lot` feature (disabled by default). Performance
+//! is the same for both cases, but the `parking_lot` based `OnceCell<T>` is
+//! smaller by up to 16 bytes.
 //!
 //! This crate uses `unsafe`.
 //!
