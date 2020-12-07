@@ -4,12 +4,11 @@
 //   * init function can fail
 
 use std::{
-    cell::{Cell, UnsafeCell},
+    cell::UnsafeCell,
     hint::unreachable_unchecked,
     marker::PhantomData,
     panic::{RefUnwindSafe, UnwindSafe},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    thread::{self, Thread},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Debug)]
@@ -17,7 +16,7 @@ pub(crate) struct OnceCell<T> {
     // This `state` word is actually an encoded version of just a pointer to a
     // `Waiter`, so we add the `PhantomData` appropriately.
     state_and_queue: AtomicUsize,
-    _marker: PhantomData<*mut Waiter>,
+    _marker: PhantomData<*mut ()>,
     value: UnsafeCell<Option<T>>,
 }
 
@@ -35,28 +34,7 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 // Three states that a OnceCell can be in, encoded into the lower bits of `state` in
 // the OnceCell structure.
 const INCOMPLETE: usize = 0x0;
-const RUNNING: usize = 0x1;
 const COMPLETE: usize = 0x2;
-
-// Mask to learn about the state. All other bits are the queue of waiters if
-// this is in the RUNNING state.
-const STATE_MASK: usize = 0x3;
-
-// Representation of a node in the linked list of waiters in the RUNNING state.
-#[repr(align(4))] // Ensure the two lower bits are free to use as state bits.
-struct Waiter {
-    thread: Cell<Option<Thread>>,
-    signaled: AtomicBool,
-    next: *const Waiter,
-}
-
-// Head of a linked list of waiters.
-// Every node is a struct on the stack of a waiting thread.
-// Will wake up the waiters when it gets dropped, i.e. also on panic.
-struct WaiterQueue<'a> {
-    state_and_queue: &'a AtomicUsize,
-    set_state_on_drop_to: usize,
-}
 
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
@@ -81,27 +59,13 @@ impl<T> OnceCell<T> {
     /// writes value only once because we never get to INCOMPLETE state after a
     /// successful write.
     #[cold]
-    pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
+    pub(crate) fn initialize<F, E>(&self, _f: F) -> Result<(), E>
     where
         F: FnOnce() -> Result<T, E>,
     {
-        let mut f = Some(f);
-        let mut res: Result<(), E> = Ok(());
-        let slot: *mut Option<T> = self.value.get();
-        initialize_inner(&self.state_and_queue, &mut || {
-            let f = f.take().unwrap();
-            match f() {
-                Ok(value) => {
-                    unsafe { *slot = Some(value) };
-                    true
-                }
-                Err(err) => {
-                    res = Err(err);
-                    false
-                }
-            }
-        });
-        res
+        // commenting the following line fixes the test, although it is a no-op
+        initialize_inner(&self.state_and_queue, &mut || false);
+        Ok(())
     }
 
     /// Get the reference to the underlying value, without checking if the cell
@@ -144,87 +108,8 @@ impl<T> OnceCell<T> {
 
 // Corresponds to `std::sync::Once::call_inner`
 // Note: this is intentionally monomorphic
-fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
-    let mut state_and_queue = my_state_and_queue.load(Ordering::Acquire);
-
-    loop {
-        match state_and_queue {
-            COMPLETE => return true,
-            INCOMPLETE => {
-                let old = my_state_and_queue.compare_and_swap(
-                    state_and_queue,
-                    RUNNING,
-                    Ordering::Acquire,
-                );
-                if old != state_and_queue {
-                    state_and_queue = old;
-                    continue;
-                }
-                let mut waiter_queue = WaiterQueue {
-                    state_and_queue: my_state_and_queue,
-                    set_state_on_drop_to: INCOMPLETE, // Difference, std uses `POISONED`
-                };
-                let success = init();
-
-                // Difference, std always uses `COMPLETE`
-                waiter_queue.set_state_on_drop_to = if success { COMPLETE } else { INCOMPLETE };
-                return success;
-            }
-            _ => {
-                assert!(state_and_queue & STATE_MASK == RUNNING);
-                wait(&my_state_and_queue, state_and_queue);
-                state_and_queue = my_state_and_queue.load(Ordering::Acquire);
-            }
-        }
-    }
-}
-
-// Copy-pasted from std exactly.
-fn wait(state_and_queue: &AtomicUsize, mut current_state: usize) {
-    loop {
-        if current_state & STATE_MASK != RUNNING {
-            return;
-        }
-
-        let node = Waiter {
-            thread: Cell::new(Some(thread::current())),
-            signaled: AtomicBool::new(false),
-            next: (current_state & !STATE_MASK) as *const Waiter,
-        };
-        let me = &node as *const Waiter as usize;
-
-        let old = state_and_queue.compare_and_swap(current_state, me | RUNNING, Ordering::Release);
-        if old != current_state {
-            current_state = old;
-            continue;
-        }
-
-        while !node.signaled.load(Ordering::Acquire) {
-            thread::park();
-        }
-        break;
-    }
-}
-
-// Copy-pasted from std exactly.
-impl Drop for WaiterQueue<'_> {
-    fn drop(&mut self) {
-        let state_and_queue =
-            self.state_and_queue.swap(self.set_state_on_drop_to, Ordering::AcqRel);
-
-        assert_eq!(state_and_queue & STATE_MASK, RUNNING);
-
-        unsafe {
-            let mut queue = (state_and_queue & !STATE_MASK) as *const Waiter;
-            while !queue.is_null() {
-                let next = (*queue).next;
-                let thread = (*queue).thread.replace(None).unwrap();
-                (*queue).signaled.store(true, Ordering::Release);
-                queue = next;
-                thread.unpark();
-            }
-        }
-    }
+fn initialize_inner(_my_state_and_queue: &AtomicUsize, _init: &mut dyn FnMut() -> bool) -> bool {
+    false
 }
 
 // These test are snatched from std as well.
@@ -255,35 +140,17 @@ mod tests {
     #[test]
     fn stampede_once() {
         static O: OnceCell<()> = OnceCell::new();
-        static mut RUN: bool = false;
+        let n_threads = 2;
 
         let (tx, rx) = channel();
-        for _ in 0..10 {
+        for _ in 0..n_threads {
             let tx = tx.clone();
             thread::spawn(move || {
-                for _ in 0..4 {
-                    thread::yield_now()
-                }
-                unsafe {
-                    O.init(|| {
-                        assert!(!RUN);
-                        RUN = true;
-                    });
-                    assert!(RUN);
-                }
+                O.init(|| ());
                 tx.send(()).unwrap();
             });
         }
-
-        unsafe {
-            O.init(|| {
-                assert!(!RUN);
-                RUN = true;
-            });
-            assert!(RUN);
-        }
-
-        for _ in 0..10 {
+        for _ in 0..n_threads {
             rx.recv().unwrap();
         }
     }
