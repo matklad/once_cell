@@ -599,6 +599,17 @@ pub mod unsync {
         pub const fn new(init: F) -> Lazy<T, F> {
             Lazy { cell: OnceCell::new(), init: Cell::new(Some(init)) }
         }
+
+        /// Consumes this `Lazy` returning the stored value.
+        ///
+        /// Returns `Ok(value)` if `Lazy` is initialized and `Err(f)` otherwise.
+        pub fn into_value(this: Lazy<T, F>) -> Result<T, F> {
+            let cell = this.cell;
+            let init = this.init;
+            cell.into_inner().ok_or_else(|| {
+                init.take().unwrap_or_else(|| panic!("Lazy instance has previously been poisoned"))
+            })
+        }
     }
 
     impl<T, F: FnOnce() -> T> Lazy<T, F> {
@@ -979,6 +990,17 @@ pub mod sync {
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
             Lazy { cell: OnceCell::new(), init: Cell::new(Some(f)) }
+        }
+
+        /// Consumes this `Lazy` returning the stored value.
+        ///
+        /// Returns `Ok(value)` if `Lazy` is initialized and `Err(f)` otherwise.
+        pub fn into_value(this: Lazy<T, F>) -> Result<T, F> {
+            let cell = this.cell;
+            let init = this.init;
+            cell.into_inner().ok_or_else(|| {
+                init.take().unwrap_or_else(|| panic!("Lazy instance has previously been poisoned"))
+            })
         }
     }
 
