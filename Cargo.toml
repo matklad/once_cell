@@ -21,7 +21,7 @@ members = ["xtask"]
 [dependencies]
 # Uses parking_lot to implement once_cell::sync::OnceCell.
 # This makes not speed difference, but makes each OnceCell<T>
-# for up to two bytes smaller, depending on the size of the T.
+# for up to 16 bytes smaller, depending on the size of the T.
 parking_lot = { version = "0.11", optional = true, default_features = false }
 
 [dev-dependencies]
