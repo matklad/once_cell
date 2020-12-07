@@ -253,6 +253,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn stampede_once() {
         static O: OnceCell<()> = OnceCell::new();
         static mut RUN: bool = false;
