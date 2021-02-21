@@ -19,11 +19,13 @@ pub struct OnceNonZeroUsize {
 
 impl OnceNonZeroUsize {
     /// Creates a new empty cell.
+    #[inline]
     pub const fn new() -> OnceNonZeroUsize {
         OnceNonZeroUsize { inner: AtomicUsize::new(0) }
     }
 
     /// Gets the underlying value.
+    #[inline]
     pub fn get(&self) -> Option<NonZeroUsize> {
         let val = self.inner.load(Ordering::Acquire);
         NonZeroUsize::new(val)
@@ -33,6 +35,7 @@ impl OnceNonZeroUsize {
     ///
     /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
     /// full.
+    #[inline]
     pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
         let val = self.inner.compare_and_swap(0, value.get(), Ordering::AcqRel);
         if val == 0 {
@@ -94,11 +97,13 @@ pub struct OnceBool {
 
 impl OnceBool {
     /// Creates a new empty cell.
+    #[inline]
     pub const fn new() -> OnceBool {
         OnceBool { inner: OnceNonZeroUsize::new() }
     }
 
     /// Gets the underlying value.
+    #[inline]
     pub fn get(&self) -> Option<bool> {
         self.inner.get().map(OnceBool::from_usize)
     }
@@ -107,6 +112,7 @@ impl OnceBool {
     ///
     /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
     /// full.
+    #[inline]
     pub fn set(&self, value: bool) -> Result<(), ()> {
         self.inner.set(OnceBool::to_usize(value))
     }
@@ -138,9 +144,11 @@ impl OnceBool {
         self.inner.get_or_try_init(|| f().map(OnceBool::to_usize)).map(OnceBool::from_usize)
     }
 
+    #[inline]
     fn from_usize(value: NonZeroUsize) -> bool {
         value.get() == 1
     }
+    #[inline]
     fn to_usize(value: bool) -> NonZeroUsize {
         unsafe { NonZeroUsize::new_unchecked(if value { 1 } else { 2 }) }
     }
@@ -148,14 +156,16 @@ impl OnceBool {
 
 #[cfg(feature = "alloc")]
 pub use self::once_box::OnceBox;
+
 #[cfg(feature = "alloc")]
 mod once_box {
-    use alloc::boxed::Box;
     use core::{
         marker::PhantomData,
         ptr,
         sync::atomic::{AtomicPtr, Ordering},
     };
+
+    use alloc::boxed::Box;
 
     /// A thread-safe cell which can be written to only once.
     #[derive(Default, Debug)]
@@ -245,6 +255,8 @@ mod once_box {
         }
     }
 
+    unsafe impl<T: Sync + Send> Sync for OnceBox<T> {}
+
     /// ```compile_fail
     /// struct S(*mut ());
     /// unsafe impl Sync for S {}
@@ -252,5 +264,5 @@ mod once_box {
     /// fn share<T: Sync>(_: &T) {}
     /// share(&once_cell::race::OnceBox::<S>::new());
     /// ```
-    unsafe impl<T: Sync + Send> Sync for OnceBox<T> {}
+    fn _dummy() {}
 }

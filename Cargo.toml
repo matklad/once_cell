@@ -33,8 +33,10 @@ regex =  "1.2.0"
 default = ["std"]
 # Enables `once_cell::sync` module.
 std = ["alloc"]
+# Enables `once_cell::race::OnceBox` type.
 alloc = []
-# Enables semver-exempt APIs of this crate
+# Enables semver-exempt APIs of this crate.
+# At the moment, this feature is unused.
 unstable = []
 
 [[example]]
