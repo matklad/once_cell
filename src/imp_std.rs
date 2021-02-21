@@ -151,12 +151,13 @@ fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> 
         match state_and_queue {
             COMPLETE => return true,
             INCOMPLETE => {
-                let old = my_state_and_queue.compare_and_swap(
+                let exchange = my_state_and_queue.compare_exchange(
                     state_and_queue,
                     RUNNING,
                     Ordering::Acquire,
+                    Ordering::Acquire,
                 );
-                if old != state_and_queue {
+                if let Err(old) = exchange {
                     state_and_queue = old;
                     continue;
                 }
@@ -193,8 +194,13 @@ fn wait(state_and_queue: &AtomicUsize, mut current_state: usize) {
         };
         let me = &node as *const Waiter as usize;
 
-        let old = state_and_queue.compare_and_swap(current_state, me | RUNNING, Ordering::Release);
-        if old != current_state {
+        let exchange = state_and_queue.compare_exchange(
+            current_state,
+            me | RUNNING,
+            Ordering::Release,
+            Ordering::Relaxed,
+        );
+        if let Err(old) = exchange {
             current_state = old;
             continue;
         }
