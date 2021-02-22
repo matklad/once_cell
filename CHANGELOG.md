@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0
+
+- Stabilize `once_cell::race` module for "first one wins" no_std-compatible initialization flavor.
+- Migrate from deprecated `compare_and_swap` to `compare_exchange`.
+
 ## 1.5.2
 
 - `OnceBox` API uses `Box<T>`.
