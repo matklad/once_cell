@@ -156,6 +156,15 @@ mod unsync {
     }
 
     #[test]
+    fn lazy_into_value() {
+        let l: Lazy<i32, _> = Lazy::new(|| panic!());
+        assert!(matches!(Lazy::into_value(l), Err(_)));
+        let l = Lazy::new(|| -> i32 { 92 });
+        Lazy::force(&l);
+        assert!(matches!(Lazy::into_value(l), Ok(92)));
+    }
+
+    #[test]
     #[cfg(feature = "std")]
     fn lazy_poisoning() {
         let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
@@ -465,6 +474,15 @@ mod sync {
             })
         }
         assert_eq!(xs(), &vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn lazy_into_value() {
+        let l: Lazy<i32, _> = Lazy::new(|| panic!());
+        assert!(matches!(Lazy::into_value(l), Err(_)));
+        let l = Lazy::new(|| -> i32 { 92 });
+        Lazy::force(&l);
+        assert!(matches!(Lazy::into_value(l), Ok(92)));
     }
 
     #[test]
