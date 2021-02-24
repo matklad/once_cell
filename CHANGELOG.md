@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+- Hide the `race` module behind (default) `race` feature.
+  Turns out that adding `race` by default was a breaking change on some platforms without atomics.
+  In this release, we make the module opt-out.
+  Technically, this is a breaking change for those who use `race` with `no_default_features`.
+  Given that the `race` module itself only several days old, the breakage is deemed acceptable.
+
 ## 1.6.0
 
 - Add `Lazy::into_value`

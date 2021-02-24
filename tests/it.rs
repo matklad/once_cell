@@ -589,7 +589,7 @@ mod sync {
     }
 }
 
-#[cfg(all(feature = "unstable", feature = "race"))]
+#[cfg(feature = "race")]
 mod race {
     use std::{
         num::NonZeroUsize,
@@ -725,7 +725,7 @@ mod race {
     }
 }
 
-#[cfg(all(feature = "unstable", feature = "alloc"))]
+#[cfg(all(feature = "race", feature = "alloc"))]
 mod race_once_box {
     use std::sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
