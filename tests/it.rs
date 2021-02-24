@@ -589,7 +589,7 @@ mod sync {
     }
 }
 
-#[cfg(feature = "unstable")]
+#[cfg(all(feature = "unstable", feature = "race"))]
 mod race {
     use std::{
         num::NonZeroUsize,

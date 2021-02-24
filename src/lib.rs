@@ -1065,4 +1065,5 @@ pub mod sync {
     fn _dummy() {}
 }
 
+#[cfg(feature = "race")]
 pub mod race;

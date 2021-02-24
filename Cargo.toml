@@ -34,7 +34,9 @@ default = ["std"]
 # Enables `once_cell::sync` module.
 std = ["alloc"]
 # Enables `once_cell::race::OnceBox` type.
-alloc = []
+alloc = ["race"]
+# Enables `once_cell::race` module.
+race = []
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
 unstable = []
