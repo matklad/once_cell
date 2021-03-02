@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use parking_lot::lock_api;
+use parking_lot::Mutex;
 
 pub(crate) struct OnceCell<T> {
     mutex: Mutex<()>,
@@ -27,7 +27,7 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
-            mutex: const_mutex(()),
+            mutex: parking_lot::const_mutex(()),
             is_initialized: AtomicBool::new(false),
             value: UnsafeCell::new(None),
         }
@@ -46,8 +46,10 @@ impl<T> OnceCell<T> {
     where
         F: FnOnce() -> Result<T, E>,
     {
-        let _guard = self.mutex.lock();
-        if !self.is_initialized() {
+        let mut f = Some(f);
+        let mut res: Result<(), E> = Ok(());
+        let slot: *mut Option<T> = self.value.get();
+        initialize_inner(&self.mutex, &self.is_initialized, &mut || {
             // We are calling user-supplied function and need to be careful.
             // - if it returns Err, we unlock mutex and return without touching anything
             // - if it panics, we unlock mutex and propagate panic without touching anything
@@ -56,15 +58,22 @@ impl<T> OnceCell<T> {
             //   but that is more complicated
             // - finally, if it returns Ok, we store the value and store the flag with
             //   `Release`, which synchronizes with `Acquire`s.
-            let value = f()?;
-            // Safe b/c we have a unique access and no panic may happen
-            // until the cell is marked as initialized.
-            let slot: &mut Option<T> = unsafe { &mut *self.value.get() };
-            debug_assert!(slot.is_none());
-            *slot = Some(value);
-            self.is_initialized.store(true, Ordering::Release);
-        }
-        Ok(())
+            let f = f.take().unwrap_or_else(|| unsafe { hint::unreachable_unchecked() });
+            match f() {
+                Ok(value) => unsafe {
+                    // Safe b/c we have a unique access and no panic may happen
+                    // until the cell is marked as initialized.
+                    debug_assert!((*slot).is_none());
+                    *slot = Some(value);
+                    true
+                },
+                Err(err) => {
+                    res = Err(err);
+                    false
+                }
+            }
+        });
+        res
     }
 
     /// Get the reference to the underlying value, without checking if the cell
@@ -102,33 +111,14 @@ impl<T> OnceCell<T> {
     }
 }
 
+#[inline(never)]
+fn initialize_inner(mutex: &Mutex<()>, is_initialized: &AtomicBool, init: &mut dyn FnMut() -> bool) {
+    let _guard = mutex.lock();
 
-type Mutex<T> = lock_api::Mutex<InlineLessRawMutex, T>;
-
-pub struct InlineLessRawMutex(parking_lot::RawMutex);
-
-pub const fn const_mutex<T>(val: T) -> Mutex<T> {
-    Mutex::const_new(<InlineLessRawMutex as lock_api::RawMutex>::INIT, val)
-}
-
-unsafe impl lock_api::RawMutex for InlineLessRawMutex {
-    type GuardMarker = lock_api::GuardNoSend;
-
-    const INIT: InlineLessRawMutex = InlineLessRawMutex(parking_lot::RawMutex::INIT);
-
-    #[inline(never)]
-    fn lock(&self) {
-        self.0.lock()
-    }
-
-    #[inline(never)]
-    fn try_lock(&self) -> bool {
-        self.0.try_lock()
-    }
-
-    #[inline(never)]
-    unsafe fn unlock(&self) {
-        self.0.unlock()
+    if !is_initialized.load(Ordering::Acquire) {
+        if init() {
+            is_initialized.store(true, Ordering::Release);
+        }
     }
 }
 
