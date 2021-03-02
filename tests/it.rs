@@ -859,4 +859,12 @@ mod race_once_box {
         });
         assert_eq!(res, "hello");
     }
+
+    #[test]
+    fn once_box_default() {
+        struct Foo;
+
+        let cell: OnceBox<Foo> = Default::default();
+        assert!(cell.get().is_none());
+    }
 }
