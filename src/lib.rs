@@ -1067,3 +1067,14 @@ pub mod sync {
 
 #[cfg(feature = "race")]
 pub mod race;
+
+#[cfg(feature = "std")]
+unsafe fn take_unchecked<T>(val: &mut Option<T>) -> T {
+    match val.take() {
+        Some(it) => it,
+        None => {
+            debug_assert!(false);
+            std::hint::unreachable_unchecked()
+        }
+    }
+}
