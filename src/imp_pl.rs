@@ -111,6 +111,7 @@ impl<T> OnceCell<T> {
     }
 }
 
+// Note: this is intentionally monomorphic
 #[inline(never)]
 fn initialize_inner(mutex: &Mutex<()>, is_initialized: &AtomicBool, init: &mut dyn FnMut() -> bool) {
     let _guard = mutex.lock();
