@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use parking_lot::Mutex;
+use parking_lot::lock_api;
 
 pub(crate) struct OnceCell<T> {
     mutex: Mutex<()>,
@@ -27,7 +27,7 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
-            mutex: parking_lot::const_mutex(()),
+            mutex: const_mutex(()),
             is_initialized: AtomicBool::new(false),
             value: UnsafeCell::new(None),
         }
@@ -99,6 +99,36 @@ impl<T> OnceCell<T> {
     /// Returns `None` if the cell was empty.
     pub(crate) fn into_inner(self) -> Option<T> {
         self.value.into_inner()
+    }
+}
+
+
+type Mutex<T> = lock_api::Mutex<InlineLessRawMutex, T>;
+
+pub struct InlineLessRawMutex(parking_lot::RawMutex);
+
+pub const fn const_mutex<T>(val: T) -> Mutex<T> {
+    Mutex::const_new(<InlineLessRawMutex as lock_api::RawMutex>::INIT, val)
+}
+
+unsafe impl lock_api::RawMutex for InlineLessRawMutex {
+    type GuardMarker = lock_api::GuardNoSend;
+
+    const INIT: InlineLessRawMutex = InlineLessRawMutex(parking_lot::RawMutex::INIT);
+
+    #[inline(never)]
+    fn lock(&self) {
+        self.0.lock()
+    }
+
+    #[inline(never)]
+    fn try_lock(&self) -> bool {
+        self.0.try_lock()
+    }
+
+    #[inline(never)]
+    unsafe fn unlock(&self) {
+        self.0.unlock()
     }
 }
 
