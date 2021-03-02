@@ -169,10 +169,16 @@ mod once_box {
     use alloc::boxed::Box;
 
     /// A thread-safe cell which can be written to only once.
-    #[derive(Default, Debug)]
+    #[derive(Debug)]
     pub struct OnceBox<T> {
         inner: AtomicPtr<T>,
         ghost: PhantomData<Option<Box<T>>>,
+    }
+
+    impl<T> Default for OnceBox<T> {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl<T> Drop for OnceBox<T> {
