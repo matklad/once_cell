@@ -35,6 +35,10 @@ fn try_main() -> Result<()> {
         cmd!("cargo test --features 'unstable std parking_lot' --no-default-features").run()?;
         cmd!("cargo test --features 'unstable std parking_lot' --no-default-features --release")
             .run()?;
+
+        cmd!("cargo test --features 'unstable alloc' --no-default-features --test it").run()?;
+        cmd!("cargo test --features 'unstable std parking_lot alloc' --no-default-features")
+            .run()?;
     }
 
     {
