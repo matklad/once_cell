@@ -89,7 +89,7 @@ impl<T> OnceCell<T> {
         let mut res: Result<(), E> = Ok(());
         let slot: *mut Option<T> = self.value.get();
         initialize_inner(&self.state_and_queue, &mut || {
-            let f = f.take().unwrap();
+            let f = f.take().unwrap_or_else(|| unsafe { unreachable_unchecked() });
             match f() {
                 Ok(value) => {
                     unsafe { *slot = Some(value) };
@@ -144,6 +144,7 @@ impl<T> OnceCell<T> {
 
 // Corresponds to `std::sync::Once::call_inner`
 // Note: this is intentionally monomorphic
+#[inline(never)]
 fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
     let mut state_and_queue = my_state_and_queue.load(Ordering::Acquire);
 
