@@ -97,6 +97,9 @@
 //! }
 //! ```
 //!
+//! Note that the variable that holds `Lazy` is declared as `static`, *not*
+//! `const`. This is important: using `const` instead compiles, but works wrong.
+//!
 //! [`sync::Lazy`]: sync/struct.Lazy.html
 //! [`unsync::Lazy`]: unsync/struct.Lazy.html
 //!
