@@ -476,6 +476,37 @@ pub mod unsync {
             Ok(())
         }
 
+        /// Sets the contents of this cell to `value` and returns a reference to it.
+        ///
+        /// Returns `Ok(&value)` if the cell was empty and `Err(value)` if it was
+        /// full.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// assert!(cell.get().is_none());
+        ///
+        /// assert_eq!(cell.set_and_get(92), Ok(&92));
+        /// assert_eq!(cell.set_and_get(62), Err(62));
+        ///
+        /// assert!(cell.get().is_some());
+        /// ```
+        pub fn set_and_get(&self, value: T) -> Result<&T, T> {
+            let slot = unsafe { &*self.inner.get() };
+            if slot.is_some() {
+                return Err(value);
+            }
+            let slot = unsafe { &mut *self.inner.get() };
+            // This is the only place where we set the slot, no races
+            // due to reentrancy/concurrency are possible, and we've
+            // checked that slot is currently `None`, so this write
+            // maintains the `inner`'s invariant.
+            *slot = Some(value);
+            Ok(slot.as_ref().unwrap())
+        }
+
         /// Gets the contents of the cell, initializing it with `f`
         /// if the cell was empty.
         ///
@@ -853,6 +884,38 @@ pub mod sync {
             self.get_or_init(|| value.take().unwrap());
             match value {
                 None => Ok(()),
+                Some(value) => Err(value),
+            }
+        }
+
+        /// Sets the contents of this cell to `value` and returns a reference to it.
+        ///
+        /// Returns `Ok(&value)` if the cell was empty and `Err(value)` if it was
+        /// full.
+        ///
+        /// # Example
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// static CELL: OnceCell<i32> = OnceCell::new();
+        ///
+        /// fn main() {
+        ///     assert!(CELL.get().is_none());
+        ///
+        ///     std::thread::spawn(|| {
+        ///         assert_eq!(CELL.set_and_get(92), Ok(&92));
+        ///     }).join().unwrap();
+        ///
+        ///     assert_eq!(CELL.set(62), Err(62));
+        ///     assert_eq!(CELL.get(), Some(&92));
+        /// }
+        /// ```
+        pub fn set_and_get(&self, value: T) -> Result<&T, T> {
+            let mut value = Some(value);
+            let new_value = self.get_or_init(|| value.take().unwrap());
+            match value {
+                None => Ok(new_value),
                 Some(value) => Err(value),
             }
         }

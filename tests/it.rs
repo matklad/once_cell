@@ -205,6 +205,13 @@ mod unsync {
             cell.set(&s).unwrap();
         }
     }
+
+    #[test]
+    fn set_and_get() {
+        let c = OnceCell::new();
+        assert_eq!(c.set_and_get(90), Ok(&90));
+        assert_eq!(c.set_and_get(50), Err(50));
+    }
 }
 
 #[cfg(feature = "std")]
@@ -586,6 +593,13 @@ mod sync {
             let s = String::new();
             cell.set(&s).unwrap();
         }
+    }
+
+    #[test]
+    fn set_and_get() {
+        let c = OnceCell::new();
+        assert_eq!(c.set_and_get(90), Ok(&90));
+        assert_eq!(c.set_and_get(50), Err(50));
     }
 }
 
