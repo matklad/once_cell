@@ -51,7 +51,7 @@ fn try_main() -> Result<()> {
     {
         let _s = section("TEST_MSRV");
         let _t = push_rustup_toolchain(MSRV);
-        cp("Cargo.lock.min", "Cargo.lock")?;
+        cp("Cargo.lock.msrv", "Cargo.lock")?;
         cmd!("cargo build").run()?;
     }
 
