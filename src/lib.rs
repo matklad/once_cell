@@ -337,10 +337,11 @@ mod imp;
 #[path = "imp_std.rs"]
 mod imp;
 
+/// Single-threaded version of `OnceCell`.
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
-        fmt, mem,
+        fmt, hint, mem,
         ops::{Deref, DerefMut},
     };
 
@@ -463,9 +464,29 @@ pub mod unsync {
         /// assert!(cell.get().is_some());
         /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
-            let slot = unsafe { &*self.inner.get() };
-            if slot.is_some() {
-                return Err(value);
+            match self.try_insert(value) {
+                Ok(_) => Ok(()),
+                Err((_, value)) => Err(value),
+            }
+        }
+
+        /// Like [`set`](Self::set), but also returns a referce to the final cell value.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// assert!(cell.get().is_none());
+        ///
+        /// assert_eq!(cell.try_insert(92), Ok(&92));
+        /// assert_eq!(cell.try_insert(62), Err((&92, 62)));
+        ///
+        /// assert!(cell.get().is_some());
+        /// ```
+        pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
+            if let Some(old) = self.get() {
+                return Err((old, value));
             }
             let slot = unsafe { &mut *self.inner.get() };
             // This is the only place where we set the slot, no races
@@ -473,7 +494,10 @@ pub mod unsync {
             // checked that slot is currently `None`, so this write
             // maintains the `inner`'s invariant.
             *slot = Some(value);
-            Ok(())
+            Ok(match &*slot {
+                Some(value) => value,
+                None => unsafe { hint::unreachable_unchecked() },
+            })
         }
 
         /// Gets the contents of the cell, initializing it with `f`
@@ -703,6 +727,7 @@ pub mod unsync {
     }
 }
 
+/// Thread-safe, blocking version of `OnceCell`.
 #[cfg(feature = "std")]
 pub mod sync {
     use std::{
@@ -849,11 +874,33 @@ pub mod sync {
         /// }
         /// ```
         pub fn set(&self, value: T) -> Result<(), T> {
+            match self.try_insert(value) {
+                Ok(_) => Ok(()),
+                Err((_, value)) => Err(value),
+            }
+        }
+
+        /// Like [`set`](Self::set), but also returns a reference to the final cell value.
+        ///
+        /// # Example
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// assert!(cell.get().is_none());
+        ///
+        /// assert_eq!(cell.try_insert(92), Ok(&92));
+        /// assert_eq!(cell.try_insert(62), Err((&92, 62)));
+        ///
+        /// assert!(cell.get().is_some());
+        /// ```
+        pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
             let mut value = Some(value);
-            self.get_or_init(|| value.take().unwrap());
+            let res = self.get_or_init(|| value.take().unwrap());
             match value {
-                None => Ok(()),
-                Some(value) => Err(value),
+                None => Ok(res),
+                Some(value) => Err((res, value)),
             }
         }
 
