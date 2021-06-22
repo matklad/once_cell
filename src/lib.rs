@@ -441,6 +441,18 @@ pub mod unsync {
         /// Gets a mutable reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
+        ///
+        /// This method is allowed to violate the invariant of writing to a `OnceCell`
+        /// at most once because it requires `&mut` access to `self`. As with all
+        /// interior mutability, `&mut` access permits arbitrary modification:
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<u32> = OnceCell::new();
+        /// cell.set(92).unwrap();
+        /// cell = OnceCell::new();
+        /// ```
         pub fn get_mut(&mut self) -> Option<&mut T> {
             // Safe because we have unique access
             unsafe { &mut *self.inner.get() }.as_mut()
@@ -589,6 +601,18 @@ pub mod unsync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.take(), Some("hello".to_string()));
         /// assert_eq!(cell.get(), None);
+        /// ```
+        ///
+        /// This method is allowed to violate the invariant of writing to a `OnceCell`
+        /// at most once because it requires `&mut` access to `self`. As with all
+        /// interior mutability, `&mut` access permits arbitrary modification:
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<u32> = OnceCell::new();
+        /// cell.set(92).unwrap();
+        /// cell = OnceCell::new();
         /// ```
         pub fn take(&mut self) -> Option<T> {
             mem::replace(self, Self::default()).into_inner()
@@ -835,6 +859,18 @@ pub mod sync {
         /// Gets the mutable reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
+        ///
+        /// This method is allowed to violate the invariant of writing to a `OnceCell`
+        /// at most once because it requires `&mut` access to `self`. As with all
+        /// interior mutability, `&mut` access permits arbitrary modification:
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<u32> = OnceCell::new();
+        /// cell.set(92).unwrap();
+        /// cell = OnceCell::new();
+        /// ```
         pub fn get_mut(&mut self) -> Option<&mut T> {
             self.0.get_mut()
         }
@@ -998,6 +1034,18 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.take(), Some("hello".to_string()));
         /// assert_eq!(cell.get(), None);
+        /// ```
+        ///
+        /// This method is allowed to violate the invariant of writing to a `OnceCell`
+        /// at most once because it requires `&mut` access to `self`. As with all
+        /// interior mutability, `&mut` access permits arbitrary modification:
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<u32> = OnceCell::new();
+        /// cell.set(92).unwrap();
+        /// cell = OnceCell::new();
         /// ```
         pub fn take(&mut self) -> Option<T> {
             mem::replace(self, Self::default()).into_inner()
