@@ -1,28 +1,20 @@
-use std::mem::size_of;
-
 use once_cell::sync::OnceCell;
 
-const N_THREADS: usize = 32;
-const N_ROUNDS: usize = 100_000_000;
-
+const N_LOOPS: usize = 8;
 static CELL: OnceCell<usize> = OnceCell::new();
 
 fn main() {
     let start = std::time::Instant::now();
-    let threads =
-        (0..N_THREADS).map(|i| std::thread::spawn(move || thread_main(i))).collect::<Vec<_>>();
-    for thread in threads {
-        thread.join().unwrap();
+    for i in 0..N_LOOPS {
+        go(i)
     }
-    println!("{:?}", start.elapsed());
-    println!("size_of::<OnceCell<()>>()   = {:?}", size_of::<OnceCell<()>>());
-    println!("size_of::<OnceCell<bool>>() = {:?}", size_of::<OnceCell<bool>>());
-    println!("size_of::<OnceCell<u32>>()  = {:?}", size_of::<OnceCell<u32>>());
+    println!("{:0.0?}", start.elapsed());
 }
 
-fn thread_main(i: usize) {
-    for _ in 0..N_ROUNDS {
+#[inline(never)]
+pub fn go(i: usize) {
+    for _ in 0..100_000_000 {
         let &value = CELL.get_or_init(|| i);
-        assert!(value < N_THREADS)
+        assert!(value < N_LOOPS)
     }
 }

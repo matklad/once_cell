@@ -30,6 +30,9 @@ crossbeam-utils = "0.7.2"
 regex =  "1.2.0"
 
 [features]
+inline_always = []
+inline_never = []
+
 default = ["std"]
 # Enables `once_cell::sync` module.
 std = ["alloc"]

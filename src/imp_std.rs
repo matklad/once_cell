@@ -82,7 +82,8 @@ impl<T> OnceCell<T> {
     /// Safety: synchronizes with store to value via SeqCst read from state,
     /// writes value only once because we never get to INCOMPLETE state after a
     /// successful write.
-    #[cold]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(feature = "inline_never", inline(never))]
     pub(crate) fn initialize<F, E>(&self, f: F) -> Result<(), E>
     where
         F: FnOnce() -> Result<T, E>,
@@ -146,7 +147,8 @@ impl<T> OnceCell<T> {
 
 // Corresponds to `std::sync::Once::call_inner`
 // Note: this is intentionally monomorphic
-#[inline(never)]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(feature = "inline_never", inline(never))]
 fn initialize_inner(my_state_and_queue: &AtomicUsize, init: &mut dyn FnMut() -> bool) -> bool {
     let mut state_and_queue = my_state_and_queue.load(Ordering::Acquire);
 
