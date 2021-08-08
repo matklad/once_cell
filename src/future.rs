@@ -2,11 +2,12 @@ use std::{
     cell::UnsafeCell,
     convert::Infallible,
     future::Future,
+    mem,
     panic::{RefUnwindSafe, UnwindSafe},
     pin::Pin,
     ptr,
     sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     task,
 };
 
@@ -378,5 +379,354 @@ impl<T> OnceCell<T> {
     /// Consumes the OnceCell, returning the wrapped value. Returns None if the cell was empty.
     pub fn into_inner(self) -> Option<T> {
         self.value.into_inner()
+    }
+}
+
+/// A value which is initialized on the first access.
+///
+/// Note: unlike [OnceCell], dropping the Future that is running an unfinished initializer function
+/// will not discard the pending state.
+pub struct Lazy<T, F = Box<dyn Future<Output = T> + Send>> {
+    value: UnsafeCell<LazyState<T, F>>,
+    inner: LazyInner<F>,
+}
+
+unsafe impl<T: Sync + Send, F: Send> Sync for Lazy<T, F> {}
+unsafe impl<T: Send, F: Send> Send for Lazy<T, F> {}
+
+enum LazyState<T, F> {
+    New(F),
+    Running,
+    Ready(T),
+}
+
+struct LazyInner<F> {
+    state: AtomicUsize,
+    queue: AtomicPtr<LazyWaker<F>>,
+}
+
+struct LazyWaker<F> {
+    future: UnsafeCell<Option<F>>,
+    wakers: Mutex<Vec<task::Waker>>,
+}
+
+unsafe impl<F: Send> Send for LazyWaker<F> {}
+unsafe impl<F: Send> Sync for LazyWaker<F> {}
+
+struct LazyHead<'a, F> {
+    waker: &'a Arc<LazyWaker<F>>,
+}
+
+impl<F> LazyInner<F> {
+    fn initialize(&self) -> Option<Arc<LazyWaker<F>>> {
+        // Increment the queue's reference count.  This ensures that queue won't be freed until we exit.
+        let prev_state = self.state.fetch_add(1, Ordering::Acquire);
+
+        // Note: unlike Arc, refcount overflow is impossible.  The only way to increment the
+        // refcount is by calling poll on the Future returned by get_or_try_init, which is !Unpin.
+        // The poll call requires a Pinned pointer to this Future, and the contract of Pin requires
+        // Drop to be called on any !Unpin value that was pinned before the memory is reused.
+        // Because the Drop impl of QueueRef decrements the refcount, an overflow would require
+        // more than (usize::MAX / 4) QueueRef objects in memory, which is impossible as these
+        // objects take up more than 4 bytes.
+
+        let mut queue = self.queue.load(Ordering::Acquire);
+        if queue.is_null() && prev_state & READY_BIT == 0 {
+            let waker: LazyWaker<F> =
+                LazyWaker { future: UnsafeCell::new(None), wakers: Mutex::new(Vec::new()) };
+
+            // Race with other callers of initialize to create the queue
+            let new_queue = Arc::into_raw(Arc::new(waker)) as *mut _;
+
+            match self.queue.compare_exchange(
+                ptr::null_mut(),
+                new_queue,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_null) => {
+                    // Normal case: it was actually set.  The Release part of AcqRel orders this
+                    // with all Acquires on the queue.
+                    queue = new_queue;
+                }
+                Err(actual) => {
+                    // we lost the race, but we have the (non-null) value now.
+                    queue = actual;
+                    // Safety: we just allocated it, and nobody else has seen it
+                    unsafe {
+                        Arc::from_raw(new_queue as *const _);
+                    }
+                }
+            }
+        }
+        let rv = if queue.is_null() {
+            None
+        } else {
+            unsafe {
+                Arc::increment_strong_count(queue as *const _);
+                Some(Arc::from_raw(queue as *const _))
+            }
+        };
+
+        let prev_state = self.state.fetch_sub(1, Ordering::AcqRel);
+        if prev_state & READY_BIT == 0 {
+            // Normal case: not ready, this is the queue for this cell.
+            debug_assert!(rv.is_some());
+            rv
+        } else {
+            // We prevented the our reference to the queue from being freed when it's elgible for
+            // freeing.  If we were the last one holding that reference, free it.
+            if prev_state == READY_BIT + 1 {
+                let queue = self.queue.swap(ptr::null_mut(), Ordering::Acquire);
+                if !queue.is_null() {
+                    unsafe {
+                        Arc::decrement_strong_count(queue as *const _);
+                    }
+                }
+            }
+            // We checked READY_BIT and it's ready
+            None
+        }
+    }
+
+    fn set_ready(&self) {
+        // This Release pairs with the Acquire any time we check READY_BIT, and ensures that the
+        // writes to the cell's value are visible to the cell's readers.
+        let prev_state = self.state.fetch_or(READY_BIT, Ordering::Release);
+
+        debug_assert_eq!(prev_state & READY_BIT, 0, "Invalid state: somoene else set READY_BIT");
+
+        // If nobody was in initialize() (normal case), then we kill our reference to the LazyWaker
+        // Arc here.  Otherwise, that function will handle the cleanup.
+        if prev_state == NEW {
+            let queue = self.queue.swap(ptr::null_mut(), Ordering::Acquire);
+            if !queue.is_null() {
+                unsafe {
+                    Arc::decrement_strong_count(queue as *const _);
+                }
+            }
+        }
+    }
+}
+
+impl<F> Drop for LazyInner<F> {
+    fn drop(&mut self) {
+        let queue = *self.queue.get_mut();
+        if !queue.is_null() {
+            // Safety: nobody else could have a reference
+            unsafe {
+                Arc::from_raw(queue);
+            }
+        }
+    }
+}
+
+impl<F> LazyWaker<F> {
+    fn poll_head<'a>(
+        self: &'a Arc<Self>,
+        cx: &mut task::Context<'_>,
+        inner: &LazyInner<F>,
+    ) -> task::Poll<Option<LazyHead<'a, F>>> {
+        let mut wakers = self.wakers.lock().unwrap();
+
+        // Don't give out the head if the cell is ready
+        let state = inner.state.load(Ordering::Acquire);
+        if state & READY_BIT != 0 {
+            return task::Poll::Ready(None);
+        }
+
+        // The head position is given to the first locker of the wakers list
+        let my_waker = cx.waker();
+        let got_lock = wakers.is_empty();
+        for waker in wakers.iter() {
+            if waker.will_wake(my_waker) {
+                return task::Poll::Pending;
+            }
+        }
+
+        wakers.push(my_waker.clone());
+
+        if got_lock {
+            task::Poll::Ready(Some(LazyHead { waker: self }))
+        } else {
+            // Anyone not given the head will be woken when it's time to poll the future again.
+            task::Poll::Pending
+        }
+    }
+}
+
+impl<F> task::Wake for LazyWaker<F> {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref()
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        let wakers = mem::replace(&mut *self.wakers.lock().unwrap(), Vec::new());
+        for waker in wakers {
+            waker.wake();
+        }
+    }
+}
+
+impl<'a, F> LazyHead<'a, F> {
+    fn set_future(&self, future: F) {
+        let ptr = self.waker.future.get();
+        unsafe {
+            *ptr = Some(future);
+        }
+    }
+
+    fn poll_inner(self) -> task::Poll<F::Output>
+    where
+        F: Future + Send + 'static,
+    {
+        let ptr = self.waker.future.get();
+        let fut = unsafe {
+            match &mut *ptr {
+                Some(fut) => Pin::new_unchecked(fut),
+                None => panic!("FutureInitializer paniced"),
+            }
+        };
+        let shared_waker = task::Waker::from(Arc::clone(self.waker));
+        let mut ctx = task::Context::from_waker(&shared_waker);
+        let rv = fut.poll(&mut ctx);
+        if rv.is_pending() {
+            // If the inner future is pending, LazyHead should not send out wakes on drop; it
+            // should wait to be woken by the inner future's poll.  This also prevents any other
+            // task from acquiring a LazyHead until the LazyWaker is woken.
+            mem::forget(self);
+        } else {
+            // Drop the pinned Future now that it has completed.
+            unsafe {
+                *ptr = None;
+            }
+        }
+        rv
+    }
+}
+
+impl<'a, F> Drop for LazyHead<'a, F> {
+    fn drop(&mut self) {
+        // Note: this is only called if the poll_inner was Ready or in case of panic.
+        //
+        // Flush the queue and wake all the tasks that were waiting.  One of them will pick up the
+        // poll if it's not done, or they will all pick up the value if it's ready.
+        let mut wakers = self.waker.wakers.lock().unwrap();
+        for waker in mem::replace(&mut *wakers, Vec::new()) {
+            waker.wake();
+        }
+    }
+}
+
+impl<T, F> Lazy<T, F> {
+    /// Creates a new lazy value with the given initializing future.
+    pub const fn new(future: F) -> Self {
+        Lazy {
+            value: UnsafeCell::new(LazyState::New(future)),
+            inner: LazyInner {
+                state: AtomicUsize::new(NEW),
+                queue: AtomicPtr::new(ptr::null_mut()),
+            },
+        }
+    }
+
+    /// Gets the value without blocking or starting the initialization.
+    pub fn try_get(&self) -> Option<&T> {
+        let state = self.inner.state.load(Ordering::Acquire);
+        if state & READY_BIT == 0 {
+            None
+        } else {
+            unsafe {
+                match &*self.value.get() {
+                    LazyState::Ready(v) => Some(v),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    /// Gets the value without blocking or starting the initialization.
+    pub fn try_get_mut(&mut self) -> Option<&mut T> {
+        match self.value.get_mut() {
+            LazyState::Ready(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Gets the value if it was set.
+    pub fn into_value(self) -> Option<T> {
+        match self.value.into_inner() {
+            LazyState::Ready(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl<T, F> Lazy<T, F>
+where
+    F: Future<Output = T> + Send + 'static,
+{
+    /// Forces the evaluation of this lazy value and returns a reference to the result.  This is
+    /// equivalent to the `Future` impl on `&Lazy`, but is explicit and may be simpler to call.
+    pub async fn get(&self) -> &T {
+        self.await
+    }
+
+    #[cold]
+    fn init_slow(&self, cx: &mut task::Context<'_>) -> task::Poll<()> {
+        let waker = self.inner.initialize();
+        let waker = match waker {
+            Some(waker) => waker,
+            None => return task::Poll::Ready(()),
+        };
+
+        match waker.poll_head(cx, &self.inner) {
+            task::Poll::Ready(Some(init_lock)) => {
+                let value = mem::replace(unsafe { &mut *self.value.get() }, LazyState::Running);
+                match value {
+                    LazyState::New(future) => {
+                        init_lock.set_future(future);
+                    }
+                    LazyState::Running => {}
+                    LazyState::Ready(_) => unreachable!(),
+                }
+
+                match init_lock.poll_inner() {
+                    task::Poll::Ready(value) => {
+                        // initialization complete
+                        unsafe {
+                            *self.value.get() = LazyState::Ready(value);
+                        }
+                        self.inner.set_ready();
+                    }
+                    task::Poll::Pending => return task::Poll::Pending,
+                }
+            }
+            task::Poll::Ready(None) => return task::Poll::Ready(()),
+            task::Poll::Pending => return task::Poll::Pending,
+        }
+        task::Poll::Ready(())
+    }
+}
+
+impl<'a, T, F> Future for &'a Lazy<T, F>
+where
+    F: Future<Output = T> + Send + 'static,
+{
+    type Output = &'a T;
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<&'a T> {
+        let state = self.inner.state.load(Ordering::Acquire);
+        if state & READY_BIT == 0 {
+            match self.init_slow(cx) {
+                task::Poll::Pending => return task::Poll::Pending,
+                task::Poll::Ready(()) => {}
+            }
+        }
+        unsafe {
+            match &*self.value.get() {
+                LazyState::Ready(v) => task::Poll::Ready(v),
+                _ => unreachable!(),
+            }
+        }
     }
 }
