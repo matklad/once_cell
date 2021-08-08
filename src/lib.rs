@@ -1208,6 +1208,9 @@ pub mod sync {
 #[cfg(feature = "race")]
 pub mod race;
 
+#[cfg(feature = "future")]
+pub mod future;
+
 #[cfg(feature = "std")]
 unsafe fn take_unchecked<T>(val: &mut Option<T>) -> T {
     match val.take() {
