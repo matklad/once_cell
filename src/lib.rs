@@ -761,7 +761,7 @@ pub mod sync {
         panic::RefUnwindSafe,
     };
 
-    use crate::imp::OnceCell as Imp;
+    use crate::{imp::OnceCell as Imp, take_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -933,7 +933,7 @@ pub mod sync {
         /// ```
         pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
             let mut value = Some(value);
-            let res = self.get_or_init(|| value.take().unwrap());
+            let res = self.get_or_init(|| unsafe { take_unchecked(&mut value) });
             match value {
                 None => Ok(res),
                 Some(value) => Err((res, value)),
