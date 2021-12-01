@@ -24,6 +24,10 @@ members = ["xtask"]
 # for up to 16 bytes smaller, depending on the size of the T.
 parking_lot = { version = "0.11", optional = true, default_features = false }
 
+# To be used in order to enable the race feature on targets
+# that doe not have atomic
+atomic-polyfill = { version = "0.1", optional = true }
+
 [dev-dependencies]
 lazy_static = "1.0.0"
 crossbeam-utils = "0.7.2"
