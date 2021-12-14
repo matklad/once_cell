@@ -1,6 +1,6 @@
 [package]
 name = "once_cell"
-version = "1.8.0"
+version = "1.9.0"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"
@@ -23,6 +23,13 @@ members = ["xtask"]
 # This makes not speed difference, but makes each OnceCell<T>
 # for up to 16 bytes smaller, depending on the size of the T.
 parking_lot = { version = "0.11", optional = true, default_features = false }
+
+# To be used in order to enable the race feature on targets
+# that do not have atomics
+# *Warning:* This can be unsound. Please read the README of
+# [atomic-polyfill](https://github.com/embassy-rs/atomic-polyfill)
+# and make sure you understand all the implications
+atomic-polyfill = { version = "0.1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
