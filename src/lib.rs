@@ -482,7 +482,7 @@ pub mod unsync {
             }
         }
 
-        /// Like [`set`](Self::set), but also returns a referce to the final cell value.
+        /// Like [`set`](Self::set), but also returns a reference to the final cell value.
         ///
         /// # Example
         /// ```
