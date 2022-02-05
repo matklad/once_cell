@@ -35,6 +35,14 @@ impl<T> OnceCell<T> {
         }
     }
 
+    pub(crate) const fn with_value(value: T) -> OnceCell<T> {
+        OnceCell {
+            mutex: parking_lot::const_mutex(()),
+            is_initialized: AtomicBool::new(true),
+            value: UnsafeCell::new(Some(value)),
+        }
+    }
+
     /// Safety: synchronizes with store to value via Release/Acquire.
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {
@@ -115,7 +123,11 @@ impl<T> OnceCell<T> {
 
 // Note: this is intentionally monomorphic
 #[inline(never)]
-fn initialize_inner(mutex: &Mutex<()>, is_initialized: &AtomicBool, init: &mut dyn FnMut() -> bool) {
+fn initialize_inner(
+    mutex: &Mutex<()>,
+    is_initialized: &AtomicBool,
+    init: &mut dyn FnMut() -> bool,
+) {
     let _guard = mutex.lock();
 
     if !is_initialized.load(Ordering::Acquire) {
