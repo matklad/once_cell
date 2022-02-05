@@ -404,6 +404,13 @@ pub mod unsync {
                 None => OnceCell::new(),
             }
         }
+
+        fn clone_from(&mut self, source: &Self) {
+            match (self.get_mut(), source.get()) {
+                (Some(this), Some(source)) => this.clone_from(source),
+                _ => *self = source.clone(),
+            }
+        }
     }
 
     impl<T: PartialEq> PartialEq for OnceCell<T> {
@@ -814,6 +821,13 @@ pub mod sync {
             match self.get() {
                 Some(value) => Self::with_value(value.clone()),
                 None => Self::new(),
+            }
+        }
+
+        fn clone_from(&mut self, source: &Self) {
+            match (self.get_mut(), source.get()) {
+                (Some(this), Some(source)) => this.clone_from(source),
+                _ => *self = source.clone(),
             }
         }
     }
