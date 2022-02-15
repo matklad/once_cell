@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="once_cell::imp::OnceCell&lt;*&gt;">
+    <DisplayString>{value}</DisplayString>
+    <Expand>
+      <Item Name="[queue]">queue</Item>
+      <Item Name="[marker]">_marker</Item>
+      <Item Name="[value]">value</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::race::OnceBool">
+    <DisplayString>{inner.inner.v.value == 1}</DisplayString>
+  </Type>
+
+  <Type Name="once_cell::race::once_box::OnceBox&lt;*&gt;">
+    <Expand>
+      <ExpandedItem>inner.p</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::race::OnceNonZeroUsize">
+    <Expand>
+      <ExpandedItem>inner</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::sync::Lazy&lt;*&gt;">
+    <Expand>
+      <ExpandedItem>cell</ExpandedItem>
+      <Item Name="[init]">init</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::sync::OnceCell&lt;*&gt;">
+    <Expand>
+      <ExpandedItem>__0</ExpandedItem>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::unsync::Lazy&lt;*&gt;">
+    <Expand>
+      <ExpandedItem>cell</ExpandedItem>
+      <Item Name="[init]">init</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="once_cell::unsync::OnceCell&lt;*&gt;">
+    <Expand>
+      <ExpandedItem>inner</ExpandedItem>
+    </Expand>
+  </Type>
+</AutoVisualizer>

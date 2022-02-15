@@ -15,14 +15,32 @@ env:
 jobs:
   test:
     name: Rust
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0 # fetch tags for publish
 
+    # Install the nightly toolchain when testing on windows
+    - name: Install Rust (nightly)
+      if: matrix.os == 'windows-latest'
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+
     - run: cargo run -p xtask -- ci
+      if: matrix.os == 'ubuntu-latest'
       env:
         CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         MIRIFLAGS: -Zmiri-strict-provenance
+
+    - name: Test with debugger_visualizer feature
+      run: cargo test --test debugger_visualizer --features debugger_visualizer -- --test-threads=1
+      if: matrix.os == 'windows-latest'

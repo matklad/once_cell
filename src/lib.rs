@@ -328,6 +328,11 @@
 //! See the [tracking issue](https://github.com/rust-lang/rust/issues/74465).
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(
+    feature = "debugger_visualizer",
+    feature(debugger_visualizer),
+    debugger_visualizer(natvis_file = "../debug_metadata/once_cell.natvis")
+)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

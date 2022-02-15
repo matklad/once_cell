@@ -35,6 +35,8 @@ atomic-polyfill = { version = "1", optional = true }
 lazy_static = "1.0.0"
 crossbeam-utils = "0.8.7"
 regex =  "1.2.0"
+debugger_test = "0.1.0"
+debugger_test_parser = "0.1.0"
 
 [features]
 default = ["std"]
@@ -47,6 +49,10 @@ race = []
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
 unstable = []
+
+# UNSTABLE FEATURES (requires Rust nightly)
+# Enable to use the #[debugger_visualizer] attribute.
+debugger_visualizer = []
 
 parking_lot = ["parking_lot_core"]
 
@@ -77,6 +83,17 @@ required-features = ["std"]
 [[example]]
 name = "test_synchronization"
 required-features = ["std"]
+
+[[test]]
+name = "debugger_visualizer"
+path = "tests/debugger_visualizer.rs"
+required-features = ["debugger_visualizer"]
+# Do not run these tests by default. These tests need to
+# be run with the additional rustc flag `--test-threads=1`
+# since each test causes a debugger to attach to the current
+# test process. If multiple debuggers try to attach at the same
+# time, the test will fail.
+test = false
 
 [package.metadata.docs.rs]
 all-features = true
