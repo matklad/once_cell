@@ -18,6 +18,13 @@ mod unsync {
     }
 
     #[test]
+    fn once_cell_with_value() {
+        const CELL: OnceCell<i32> = OnceCell::with_value(12);
+        let cell = CELL;
+        assert_eq!(cell.get(), Some(&12));
+    }
+
+    #[test]
     fn once_cell_get_mut() {
         let mut c = OnceCell::new();
         assert!(c.get_mut().is_none());
@@ -228,6 +235,12 @@ mod sync {
         .unwrap();
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
+    }
+
+    #[test]
+    fn once_cell_with_value() {
+        static CELL: OnceCell<i32> = OnceCell::with_value(12);
+        assert_eq!(CELL.get(), Some(&12));
     }
 
     #[test]
