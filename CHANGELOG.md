@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11
+
+- Add `OnceCell::with_value` to create initialized `OnceCell` at compile time.
+- Improve `Clone` implementation for `OnceCell`.
+
 ## 1.10
 
 - upgrade `parking_lot` to `0.12.0` (note that this bumps MSRV with `parking_lot` feature enabled to `1.49.0`).

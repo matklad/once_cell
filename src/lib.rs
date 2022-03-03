@@ -399,14 +399,17 @@ pub mod unsync {
 
     impl<T: Clone> Clone for OnceCell<T> {
         fn clone(&self) -> OnceCell<T> {
-            let res = OnceCell::new();
-            if let Some(value) = self.get() {
-                match res.set(value.clone()) {
-                    Ok(()) => (),
-                    Err(_) => unreachable!(),
-                }
+            match self.get() {
+                Some(value) => OnceCell::with_value(value.clone()),
+                None => OnceCell::new(),
             }
-            res
+        }
+
+        fn clone_from(&mut self, source: &Self) {
+            match (self.get_mut(), source.get()) {
+                (Some(this), Some(source)) => this.clone_from(source),
+                _ => *self = source.clone(),
+            }
         }
     }
 
@@ -420,7 +423,7 @@ pub mod unsync {
 
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
-            OnceCell { inner: UnsafeCell::new(Some(value)) }
+            OnceCell::with_value(value)
         }
     }
 
@@ -428,6 +431,11 @@ pub mod unsync {
         /// Creates a new empty cell.
         pub const fn new() -> OnceCell<T> {
             OnceCell { inner: UnsafeCell::new(None) }
+        }
+
+        /// Creates a new initialized cell.
+        pub const fn with_value(value: T) -> OnceCell<T> {
+            OnceCell { inner: UnsafeCell::new(Some(value)) }
         }
 
         /// Gets a reference to the underlying value.
@@ -810,22 +818,23 @@ pub mod sync {
 
     impl<T: Clone> Clone for OnceCell<T> {
         fn clone(&self) -> OnceCell<T> {
-            let res = OnceCell::new();
-            if let Some(value) = self.get() {
-                match res.set(value.clone()) {
-                    Ok(()) => (),
-                    Err(_) => unreachable!(),
-                }
+            match self.get() {
+                Some(value) => Self::with_value(value.clone()),
+                None => Self::new(),
             }
-            res
+        }
+
+        fn clone_from(&mut self, source: &Self) {
+            match (self.get_mut(), source.get()) {
+                (Some(this), Some(source)) => this.clone_from(source),
+                _ => *self = source.clone(),
+            }
         }
     }
 
     impl<T> From<T> for OnceCell<T> {
         fn from(value: T) -> Self {
-            let cell = Self::new();
-            cell.get_or_init(|| value);
-            cell
+            Self::with_value(value)
         }
     }
 
@@ -841,6 +850,11 @@ pub mod sync {
         /// Creates a new empty cell.
         pub const fn new() -> OnceCell<T> {
             OnceCell(Imp::new())
+        }
+
+        /// Creates a new initialized cell.
+        pub const fn with_value(value: T) -> OnceCell<T> {
+            OnceCell(Imp::with_value(value))
         }
 
         /// Gets the reference to the underlying value.

@@ -69,6 +69,14 @@ impl<T> OnceCell<T> {
         }
     }
 
+    pub(crate) const fn with_value(value: T) -> OnceCell<T> {
+        OnceCell {
+            state_and_queue: AtomicUsize::new(COMPLETE),
+            _marker: PhantomData,
+            value: UnsafeCell::new(Some(value)),
+        }
+    }
+
     /// Safety: synchronizes with store to value via Release/(Acquire|SeqCst).
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {

@@ -33,7 +33,7 @@ atomic-polyfill = { version = "0.1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
-crossbeam-utils = "0.7.2"
+crossbeam-utils = "0.8.7"
 regex =  "1.2.0"
 
 [features]
