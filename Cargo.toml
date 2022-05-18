@@ -22,7 +22,7 @@ members = ["xtask"]
 # Uses parking_lot to implement once_cell::sync::OnceCell.
 # This makes not speed difference, but makes each OnceCell<T>
 # for up to 16 bytes smaller, depending on the size of the T.
-parking_lot = { version = "0.12", optional = true, default_features = false }
+parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
 
 # To be used in order to enable the race feature on targets
 # that do not have atomics
@@ -47,6 +47,8 @@ race = []
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
 unstable = []
+
+parking_lot = ["parking_lot_core"]
 
 [[example]]
 name = "bench"
