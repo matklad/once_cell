@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 
+- Add `OnceCell::wait`, a blocking variant of `get`.
 
 ## 1.11
 
