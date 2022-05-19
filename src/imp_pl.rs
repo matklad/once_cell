@@ -120,6 +120,10 @@ struct Guard<'a> {
 impl<'a> Drop for Guard<'a> {
     fn drop(&mut self) {
         self.state.store(self.new_state, Ordering::Release);
+        unsafe {
+            let key = self.state as *const _ as usize;
+            parking_lot_core::unpark_all(key, parking_lot_core::DEFAULT_UNPARK_TOKEN);
+        }
     }
 }
 
@@ -135,9 +139,6 @@ fn initialize_inner(state: &AtomicU8, init: &mut dyn FnMut() -> bool) {
                 let mut guard = Guard { state, new_state: INCOMPLETE };
                 if init() {
                     guard.new_state = COMPLETE;
-                }
-                unsafe {
-                    parking_lot_core::unpark_all(key, parking_lot_core::DEFAULT_UNPARK_TOKEN);
                 }
                 return;
             }
