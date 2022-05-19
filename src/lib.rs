@@ -311,6 +311,10 @@
 //! At the moment, `unsync` has an additional benefit that reentrant initialization causes a panic, which
 //! might be easier to debug than a deadlock.
 //!
+//! **Does this crate support async?**
+//!
+//! No, but you can use [`async_once_cell`](https://crates.io/crates/async_once_cell) instead.
+//!
 //! # Related crates
 //!
 //! * [double-checked-cell](https://github.com/niklasf/double-checked-cell)
@@ -318,6 +322,7 @@
 //! * [lazycell](https://crates.io/crates/lazycell)
 //! * [mitochondria](https://crates.io/crates/mitochondria)
 //! * [lazy_static](https://crates.io/crates/lazy_static)
+//! * [async_once_cell](https://crates.io/crates/async_once_cell)
 //!
 //! Most of this crate's functionality is available in `std` in nightly Rust.
 //! See the [tracking issue](https://github.com/rust-lang/rust/issues/74465).

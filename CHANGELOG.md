@@ -1,9 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- 
+
 ## 1.11
 
-- Add `OnceCell::with_value` to create initialized `OnceCell` at compile time.
+- Add `OnceCell::with_value` to create initialized `OnceCell` in `const` context.
 - Improve `Clone` implementation for `OnceCell`.
+- Rewrite `parking_lot` version on top of `parking_lot_core`, for even smaller cells!
 
 ## 1.10
 

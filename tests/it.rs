@@ -320,6 +320,28 @@ mod sync {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // miri doesn't support Barrier
+    fn get_or_init_stress() {
+        use std::sync::Barrier;
+        let n_threads = 1_000;
+        let n_cells = 1_000;
+        let cells: Vec<_> = std::iter::repeat_with(|| (Barrier::new(n_threads), OnceCell::new()))
+            .take(n_cells)
+            .collect();
+        scope(|s| {
+            for _ in 0..n_threads {
+                s.spawn(|_| {
+                    for (i, (b, s)) in cells.iter().enumerate() {
+                        b.wait();
+                        let j = s.get_or_init(|| i);
+                        assert_eq!(*j, i);
+                    }
+                });
+            }
+        }).unwrap();
+    }
+
+    #[test]
     fn from_impl() {
         assert_eq!(OnceCell::from("value").get(), Some(&"value"));
         assert_ne!(OnceCell::from("foo").get(), Some(&"bar"));
