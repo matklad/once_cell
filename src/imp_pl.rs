@@ -121,7 +121,7 @@ impl<'a> Drop for Guard<'a> {
     fn drop(&mut self) {
         self.state.store(self.new_state, Ordering::Release);
         unsafe {
-            let key = self.state as *const _ as usize;
+            let key = self.state as *const AtomicU8 as usize;
             parking_lot_core::unpark_all(key, parking_lot_core::DEFAULT_UNPARK_TOKEN);
         }
     }
@@ -130,7 +130,6 @@ impl<'a> Drop for Guard<'a> {
 // Note: this is intentionally monomorphic
 #[inline(never)]
 fn initialize_inner(state: &AtomicU8, init: &mut dyn FnMut() -> bool) {
-    let key = state as *const _ as usize;
     loop {
         let exchange =
             state.compare_exchange_weak(INCOMPLETE, RUNNING, Ordering::Acquire, Ordering::Acquire);
@@ -144,6 +143,7 @@ fn initialize_inner(state: &AtomicU8, init: &mut dyn FnMut() -> bool) {
             }
             Err(COMPLETE) => return,
             Err(RUNNING) => unsafe {
+                let key = state as *const AtomicU8 as usize;
                 parking_lot_core::park(
                     key,
                     || state.load(Ordering::Relaxed) == RUNNING,
