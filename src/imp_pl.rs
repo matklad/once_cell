@@ -129,7 +129,7 @@ fn initialize_inner(state: &AtomicU8, init: &mut dyn FnMut() -> bool) {
     let key = state as *const _ as usize;
     loop {
         let exchange =
-            state.compare_exchange(INCOMPLETE, RUNNING, Ordering::Acquire, Ordering::Acquire);
+            state.compare_exchange_weak(INCOMPLETE, RUNNING, Ordering::Acquire, Ordering::Acquire);
         match exchange {
             Ok(_) => {
                 let mut guard = Guard { state, new_state: INCOMPLETE };
