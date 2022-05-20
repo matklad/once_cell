@@ -320,6 +320,17 @@ mod sync {
     }
 
     #[test]
+    fn wait() {
+        let cell: OnceCell<String> = OnceCell::new();
+        scope(|s| {
+            s.spawn(|_| cell.set("hello".to_string()));
+            let greeting = cell.wait();
+            assert_eq!(greeting, "hello")
+        })
+        .unwrap();
+    }
+
+    #[test]
     #[cfg_attr(miri, ignore)] // miri doesn't support Barrier
     fn get_or_init_stress() {
         use std::sync::Barrier;
@@ -329,16 +340,18 @@ mod sync {
             .take(n_cells)
             .collect();
         scope(|s| {
-            for _ in 0..n_threads {
-                s.spawn(|_| {
+            for t in 0..n_threads {
+                let cells = &cells;
+                s.spawn(move |_| {
                     for (i, (b, s)) in cells.iter().enumerate() {
                         b.wait();
-                        let j = s.get_or_init(|| i);
+                        let j = if t % 2 == 0 { s.wait() } else { s.get_or_init(|| i) };
                         assert_eq!(*j, i);
                     }
                 });
             }
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     #[test]
