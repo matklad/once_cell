@@ -875,7 +875,26 @@ pub mod sync {
             }
         }
 
-        /// Blocks until the value is set by another thread.
+        /// Gets the reference to the underlying value, blocking the current
+        /// thread until it is set.
+        ///
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let mut cell = std::sync::Arc::new(OnceCell::new());
+        /// let t = std::thread::spawn({
+        ///     let cell = std::sync::Arc::clone(&cell);
+        ///     move || cell.set(92).unwrap()
+        /// });
+        ///
+        /// // Returns immediately, but might return None.
+        /// let _value_or_none = cell.get();
+        ///
+        /// // Will return 92, but might block until the other thread does `.set`.
+        /// let value: &u32 = cell.wait();
+        /// assert_eq!(*value, 92);
+        /// t.join().unwrap();;
+        /// ```
         pub fn wait(&self) -> &T {
             if !self.0.is_initialized() {
                 self.0.wait()
