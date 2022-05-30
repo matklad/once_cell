@@ -434,6 +434,15 @@ pub mod unsync {
 
     impl<T> OnceCell<T> {
         /// Creates a new empty cell.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell: OnceCell<u32> = OnceCell::new();
+        /// cell.set(92).unwrap();
+        /// cell = OnceCell::new();
+        /// ```
         pub const fn new() -> OnceCell<T> {
             OnceCell { inner: UnsafeCell::new(None) }
         }
@@ -457,15 +466,7 @@ pub mod unsync {
         ///
         /// This method is allowed to violate the invariant of writing to a `OnceCell`
         /// at most once because it requires `&mut` access to `self`. As with all
-        /// interior mutability, `&mut` access permits arbitrary modification:
-        ///
-        /// ```
-        /// use once_cell::unsync::OnceCell;
-        ///
-        /// let mut cell: OnceCell<u32> = OnceCell::new();
-        /// cell.set(92).unwrap();
-        /// cell = OnceCell::new();
-        /// ```
+        /// interior mutability, `&mut` access permits arbitrary modification.
         pub fn get_mut(&mut self) -> Option<&mut T> {
             // Safe because we have unique access
             unsafe { &mut *self.inner.get() }.as_mut()
