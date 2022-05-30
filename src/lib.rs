@@ -464,7 +464,8 @@ pub mod unsync {
         ///
         /// let mut cell: OnceCell<u32> = OnceCell::new();
         /// cell.set(92).unwrap();
-        /// cell = OnceCell::new();
+        /// *cell.get_mut().unwrap() = 93;
+        /// assert_eq!(cell.get(), Some(&93));
         /// ```
         pub fn get_mut(&mut self) -> Option<&mut T> {
             // Safe because we have unique access
