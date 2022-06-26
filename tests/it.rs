@@ -333,8 +333,8 @@ mod sync {
     #[test]
     fn get_or_init_stress() {
         use std::sync::Barrier;
-        let n_threads = 1_000;
-        let n_cells = 1_000;
+        let n_threads = if cfg!(miri) { 30 } else { 1_000 };
+        let n_cells = if cfg!(miri) { 30 } else { 1_000 };
         let cells: Vec<_> = std::iter::repeat_with(|| (Barrier::new(n_threads), OnceCell::new()))
             .take(n_cells)
             .collect();
@@ -577,7 +577,7 @@ mod sync {
 
     #[test]
     fn once_cell_does_not_leak_partially_constructed_boxes() {
-        let n_tries = 100;
+        let n_tries = if cfg!(miri) { 10 } else { 100 };
         let n_readers = 10;
         let n_writers = 3;
         const MSG: &str = "Hello, World";
