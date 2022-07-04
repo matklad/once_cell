@@ -4,6 +4,10 @@
 
 -
 
+## 1.13.0
+
+- Add `Lazy::get`, similar to `OnceCell::get`.
+
 ## 1.12.1
 
 - Remove incorrect `debug_assert`.

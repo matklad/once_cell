@@ -741,6 +741,23 @@ pub mod unsync {
                 None => panic!("Lazy instance has previously been poisoned"),
             })
         }
+
+        /// Gets the reference to the result of this lazy value if
+        /// it was initialized, otherwise returns `None`.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::Lazy;
+        ///
+        /// let lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::get(&lazy), None);
+        /// assert_eq!(&*lazy, &92);
+        /// assert_eq!(Lazy::get(&lazy), Some(&92));
+        /// ```
+        pub fn get(this: &Lazy<T, F>) -> Option<&T> {
+            this.cell.get()
+        }
     }
 
     impl<T, F: FnOnce() -> T> Deref for Lazy<T, F> {
@@ -1213,6 +1230,23 @@ pub mod sync {
                 Some(f) => f(),
                 None => panic!("Lazy instance has previously been poisoned"),
             })
+        }
+
+        /// Gets the reference to the result of this lazy value if
+        /// it was initialized, otherwise returns `None`.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::Lazy;
+        ///
+        /// let lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::get(&lazy), None);
+        /// assert_eq!(&*lazy, &92);
+        /// assert_eq!(Lazy::get(&lazy), Some(&92));
+        /// ```
+        pub fn get(this: &Lazy<T, F>) -> Option<&T> {
+            this.cell.get()
         }
     }
 
