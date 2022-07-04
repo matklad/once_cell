@@ -4,6 +4,10 @@
 
 -
 
+## 1.12.1
+
+- Remove incorrect `debug_assert`.
+
 ## 1.12.0
 
 - Add `OnceCell::wait`, a blocking variant of `get`.
