@@ -144,7 +144,7 @@
 //!
 //! ## Lazily Compiled Regex
 //!
-//! This is a `regex!` macro which takes expression(s) evaluating to `&str`(s) and 
+//! This is a `regex!` macro which takes expression(s) evaluating to `&str`(s) and
 //! returns an *expression* (or tuple of expressions) that evaluate(s) to `&'static Regex`(es):
 //!
 //! ```
@@ -157,6 +157,34 @@
 //! ```
 //!
 //! This macro can be useful to avoid the "compile regex on every loop iteration" problem.
+//!
+//! ### Examples
+//!
+//! ```
+//! # use regex::Regex;
+//! # macro_rules! regex {
+//! #     ($($re:expr),+ $(,)?) => {($({
+//! #         static RE: ::once_cell::sync::OnceCell<::regex::Regex> = ::once_cell::sync::OnceCell::new();
+//! #         RE.get_or_init(|| ::regex::Regex::new($re).unwrap())
+//! #     }),+)};
+//! # }
+//! let number_re: &'static Regex = regex!(r"^\d+$");
+//!
+//! assert!(number_re.is_match("123"));
+//! ```
+//!
+//! ```
+//! # macro_rules! regex {
+//! #     ($($re:expr),+ $(,)?) => {($({
+//! #         static RE: ::once_cell::sync::OnceCell<::regex::Regex> = ::once_cell::sync::OnceCell::new();
+//! #         RE.get_or_init(|| ::regex::Regex::new($re).unwrap())
+//! #     }),+)};
+//! # }
+//! let (whitespace_re, number_re) = regex!(r"\s+", r"^\d+$");
+//!
+//! assert!(whitespace_re.is_match("  "));
+//! assert!(number_re.is_match("123"));
+//! ```
 //!
 //! ## Runtime `include_bytes!`
 //!
