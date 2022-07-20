@@ -144,7 +144,7 @@
 //!
 //! ## Lazily Compiled Regex
 //!
-//! This is a `regex!` macro which takes expressions evaluating to `&str`(s) and 
+//! This is a `regex!` macro which takes expression(s) evaluating to `&str`(s) and 
 //! returns an *expression* (or tuple of expressions) that evaluate(s) to `&'static Regex`(es):
 //!
 //! ```
