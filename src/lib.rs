@@ -144,15 +144,15 @@
 //!
 //! ## Lazily Compiled Regex
 //!
-//! This is a `regex!` macro which takes a string literal and returns an
-//! *expression* that evaluates to a `&'static Regex`:
+//! This is a `regex!` macro which takes expressions evaluating to `&str`(s) and 
+//! returns an *expression* (or tuple of expressions) that evaluate(s) to `&'static Regex`(es):
 //!
 //! ```
 //! macro_rules! regex {
-//!     ($re:literal $(,)?) => {{
-//!         static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
-//!         RE.get_or_init(|| regex::Regex::new($re).unwrap())
-//!     }};
+//!     ($($re:expr),+ $(,)?) => {($({
+//!         static RE: ::once_cell::sync::OnceCell<::regex::Regex> = ::once_cell::sync::OnceCell::new();
+//!         RE.get_or_init(|| ::regex::Regex::new($re).unwrap())
+//!     }),+)};
 //! }
 //! ```
 //!
