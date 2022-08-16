@@ -3,12 +3,15 @@
 //   * no poisoning
 //   * init function can fail
 
+// Our polyfills collide with the strict_provenance feature
+#![allow(unstable_name_collisions)]
+
 use std::{
     cell::{Cell, UnsafeCell},
     hint::unreachable_unchecked,
     marker::PhantomData,
     panic::{RefUnwindSafe, UnwindSafe},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
     thread::{self, Thread},
 };
 
@@ -24,7 +27,7 @@ pub(crate) struct OnceCell<T> {
     //
     // State is encoded in two low bits. Only `INCOMPLETE` and `RUNNING` states
     // allow waiters.
-    queue: AtomicUsize,
+    queue: AtomicPtr<Waiter>,
     _marker: PhantomData<*mut Waiter>,
     value: UnsafeCell<Option<T>>,
 }
@@ -43,7 +46,7 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
-            queue: AtomicUsize::new(INCOMPLETE),
+            queue: AtomicPtr::new(INCOMPLETE_PTR),
             _marker: PhantomData,
             value: UnsafeCell::new(None),
         }
@@ -51,7 +54,7 @@ impl<T> OnceCell<T> {
 
     pub(crate) const fn with_value(value: T) -> OnceCell<T> {
         OnceCell {
-            queue: AtomicUsize::new(COMPLETE),
+            queue: AtomicPtr::new(COMPLETE_PTR),
             _marker: PhantomData,
             value: UnsafeCell::new(Some(value)),
         }
@@ -64,7 +67,7 @@ impl<T> OnceCell<T> {
         // operations visible to us, and, this being a fast path, weaker
         // ordering helps with performance. This `Acquire` synchronizes with
         // `SeqCst` operations on the slow path.
-        self.queue.load(Ordering::Acquire) == COMPLETE
+        self.queue.load(Ordering::Acquire) == COMPLETE_PTR
     }
 
     /// Safety: synchronizes with store to value via SeqCst read from state,
@@ -145,6 +148,8 @@ impl<T> OnceCell<T> {
 const INCOMPLETE: usize = 0x0;
 const RUNNING: usize = 0x1;
 const COMPLETE: usize = 0x2;
+const INCOMPLETE_PTR: *mut Waiter = INCOMPLETE as *mut Waiter;
+const COMPLETE_PTR: *mut Waiter = COMPLETE as *mut Waiter;
 
 // Mask to learn about the state. All other bits are the queue of waiters if
 // this is in the RUNNING state.
@@ -156,23 +161,24 @@ const STATE_MASK: usize = 0x3;
 struct Waiter {
     thread: Cell<Option<Thread>>,
     signaled: AtomicBool,
-    next: *const Waiter,
+    next: *mut Waiter,
 }
 
 /// Drains and notifies the queue of waiters on drop.
 struct Guard<'a> {
-    queue: &'a AtomicUsize,
-    new_queue: usize,
+    queue: &'a AtomicPtr<Waiter>,
+    new_queue: *mut Waiter,
 }
 
 impl Drop for Guard<'_> {
     fn drop(&mut self) {
         let queue = self.queue.swap(self.new_queue, Ordering::AcqRel);
 
-        assert_eq!(queue & STATE_MASK, RUNNING);
+        let state = queue.addr() & STATE_MASK;
+        assert_eq!(state, RUNNING);
 
         unsafe {
-            let mut waiter = (queue & !STATE_MASK) as *const Waiter;
+            let mut waiter = queue.map_addr(|q| q & !STATE_MASK);
             while !waiter.is_null() {
                 let next = (*waiter).next;
                 let thread = (*waiter).thread.take().unwrap();
@@ -191,17 +197,17 @@ impl Drop for Guard<'_> {
 //
 // Note: this is intentionally monomorphic
 #[inline(never)]
-fn initialize_or_wait(queue: &AtomicUsize, mut init: Option<&mut dyn FnMut() -> bool>) {
+fn initialize_or_wait(queue: &AtomicPtr<Waiter>, mut init: Option<&mut dyn FnMut() -> bool>) {
     let mut curr_queue = queue.load(Ordering::Acquire);
 
     loop {
-        let curr_state = curr_queue & STATE_MASK;
+        let curr_state = curr_queue.addr() & STATE_MASK;
         match (curr_state, &mut init) {
             (COMPLETE, _) => return,
             (INCOMPLETE, Some(init)) => {
                 let exchange = queue.compare_exchange(
                     curr_queue,
-                    (curr_queue & !STATE_MASK) | RUNNING,
+                    curr_queue.map_addr(|q| (q & !STATE_MASK) | RUNNING),
                     Ordering::Acquire,
                     Ordering::Acquire,
                 );
@@ -209,9 +215,9 @@ fn initialize_or_wait(queue: &AtomicUsize, mut init: Option<&mut dyn FnMut() -> 
                     curr_queue = new_queue;
                     continue;
                 }
-                let mut guard = Guard { queue, new_queue: INCOMPLETE };
+                let mut guard = Guard { queue, new_queue: INCOMPLETE_PTR };
                 if init() {
-                    guard.new_queue = COMPLETE;
+                    guard.new_queue = COMPLETE_PTR;
                 }
                 return;
             }
@@ -224,24 +230,24 @@ fn initialize_or_wait(queue: &AtomicUsize, mut init: Option<&mut dyn FnMut() -> 
     }
 }
 
-fn wait(queue: &AtomicUsize, mut curr_queue: usize) {
-    let curr_state = curr_queue & STATE_MASK;
+fn wait(queue: &AtomicPtr<Waiter>, mut curr_queue: *mut Waiter) {
+    let curr_state = curr_queue.addr() & STATE_MASK;
     loop {
         let node = Waiter {
             thread: Cell::new(Some(thread::current())),
             signaled: AtomicBool::new(false),
-            next: (curr_queue & !STATE_MASK) as *const Waiter,
+            next: curr_queue.map_addr(|q| q & !STATE_MASK),
         };
-        let me = &node as *const Waiter as usize;
+        let me = &node as *const Waiter as *mut Waiter;
 
         let exchange = queue.compare_exchange(
             curr_queue,
-            me | curr_state,
+            me.map_addr(|q| q | curr_state),
             Ordering::Release,
             Ordering::Relaxed,
         );
         if let Err(new_queue) = exchange {
-            if new_queue & STATE_MASK != curr_state {
+            if new_queue.addr() & STATE_MASK != curr_state {
                 return;
             }
             curr_queue = new_queue;
@@ -252,6 +258,60 @@ fn wait(queue: &AtomicUsize, mut curr_queue: usize) {
             thread::park();
         }
         break;
+    }
+}
+
+// This trait is copied directly from the implementation of https://crates.io/crates/sptr
+trait Strict {
+    type Pointee;
+    fn addr(self) -> usize;
+    fn with_addr(self, addr: usize) -> Self;
+    fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
+}
+
+impl<T> Strict for *mut T {
+    type Pointee = T;
+
+    #[must_use]
+    #[inline]
+    fn addr(self) -> usize
+    where
+        T: Sized,
+    {
+        // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+        // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
+        // provenance).
+        unsafe { core::mem::transmute(self) }
+    }
+
+    #[must_use]
+    #[inline]
+    fn with_addr(self, addr: usize) -> Self
+    where
+        T: Sized,
+    {
+        // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+        //
+        // In the mean-time, this operation is defined to be "as if" it was
+        // a wrapping_offset, so we can emulate it as such. This should properly
+        // restore pointer provenance even under today's compiler.
+        let self_addr = self.addr() as isize;
+        let dest_addr = addr as isize;
+        let offset = dest_addr.wrapping_sub(self_addr);
+
+        // This is the canonical desugarring of this operation,
+        // but `pointer::cast` was only stabilized in 1.38.
+        // self.cast::<u8>().wrapping_offset(offset).cast::<T>()
+        (self as *mut u8).wrapping_offset(offset) as *mut T
+    }
+
+    #[must_use]
+    #[inline]
+    fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self
+    where
+        T: Sized,
+    {
+        self.with_addr(f(self.addr()))
     }
 }
 
