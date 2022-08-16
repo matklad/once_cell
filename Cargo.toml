@@ -20,8 +20,8 @@ members = ["xtask"]
 
 [dependencies]
 # Uses parking_lot to implement once_cell::sync::OnceCell.
-# This makes not speed difference, but makes each OnceCell<T>
-# for up to 16 bytes smaller, depending on the size of the T.
+# This makes no speed difference, but makes each OnceCell<T>
+# up to 16 bytes smaller, depending on the size of the T.
 parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
 
 # To be used in order to enable the race feature on targets
@@ -29,7 +29,7 @@ parking_lot_core = { version = "0.9.3", optional = true, default_features = fals
 # *Warning:* This can be unsound. Please read the README of
 # [atomic-polyfill](https://github.com/embassy-rs/atomic-polyfill)
 # and make sure you understand all the implications
-atomic-polyfill = { version = "0.1", optional = true }
+atomic-polyfill = { version = "1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
