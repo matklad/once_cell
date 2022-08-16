@@ -3,9 +3,6 @@
 //   * no poisoning
 //   * init function can fail
 
-// Our polyfills collide with the strict_provenance feature
-#![allow(unstable_name_collisions)]
-
 use std::{
     cell::{Cell, UnsafeCell},
     hint::unreachable_unchecked,
@@ -174,11 +171,11 @@ impl Drop for Guard<'_> {
     fn drop(&mut self) {
         let queue = self.queue.swap(self.new_queue, Ordering::AcqRel);
 
-        let state = queue.addr() & STATE_MASK;
+        let state = strict::addr(queue) & STATE_MASK;
         assert_eq!(state, RUNNING);
 
         unsafe {
-            let mut waiter = queue.map_addr(|q| q & !STATE_MASK);
+            let mut waiter = strict::map_addr(queue, |q| q & !STATE_MASK);
             while !waiter.is_null() {
                 let next = (*waiter).next;
                 let thread = (*waiter).thread.take().unwrap();
@@ -201,13 +198,13 @@ fn initialize_or_wait(queue: &AtomicPtr<Waiter>, mut init: Option<&mut dyn FnMut
     let mut curr_queue = queue.load(Ordering::Acquire);
 
     loop {
-        let curr_state = curr_queue.addr() & STATE_MASK;
+        let curr_state = strict::addr(curr_queue) & STATE_MASK;
         match (curr_state, &mut init) {
             (COMPLETE, _) => return,
             (INCOMPLETE, Some(init)) => {
                 let exchange = queue.compare_exchange(
                     curr_queue,
-                    curr_queue.map_addr(|q| (q & !STATE_MASK) | RUNNING),
+                    strict::map_addr(curr_queue, |q| (q & !STATE_MASK) | RUNNING),
                     Ordering::Acquire,
                     Ordering::Acquire,
                 );
@@ -231,23 +228,23 @@ fn initialize_or_wait(queue: &AtomicPtr<Waiter>, mut init: Option<&mut dyn FnMut
 }
 
 fn wait(queue: &AtomicPtr<Waiter>, mut curr_queue: *mut Waiter) {
-    let curr_state = curr_queue.addr() & STATE_MASK;
+    let curr_state = strict::addr(curr_queue) & STATE_MASK;
     loop {
         let node = Waiter {
             thread: Cell::new(Some(thread::current())),
             signaled: AtomicBool::new(false),
-            next: curr_queue.map_addr(|q| q & !STATE_MASK),
+            next: strict::map_addr(curr_queue, |q| q & !STATE_MASK),
         };
         let me = &node as *const Waiter as *mut Waiter;
 
         let exchange = queue.compare_exchange(
             curr_queue,
-            me.map_addr(|q| q | curr_state),
+            strict::map_addr(me, |q| q | curr_state),
             Ordering::Release,
             Ordering::Relaxed,
         );
         if let Err(new_queue) = exchange {
-            if new_queue.addr() & STATE_MASK != curr_state {
+            if strict::addr(new_queue) & STATE_MASK != curr_state {
                 return;
             }
             curr_queue = new_queue;
@@ -261,32 +258,26 @@ fn wait(queue: &AtomicPtr<Waiter>, mut curr_queue: *mut Waiter) {
     }
 }
 
-// This trait is copied directly from the implementation of https://crates.io/crates/sptr
-trait Strict {
-    type Pointee;
-    fn addr(self) -> usize;
-    fn with_addr(self, addr: usize) -> Self;
-    fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
-}
-
-impl<T> Strict for *mut T {
-    type Pointee = T;
-
+// Polyfill of strict provenance from https://crates.io/crates/sptr.
+//
+// Use free-standing function rather than a trait to keep things simple and
+// avoid any potential conflicts with future stabile std API.
+mod strict {
     #[must_use]
     #[inline]
-    fn addr(self) -> usize
+    pub(crate) fn addr<T>(ptr: *mut T) -> usize
     where
         T: Sized,
     {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
         // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
         // provenance).
-        unsafe { core::mem::transmute(self) }
+        unsafe { core::mem::transmute(ptr) }
     }
 
     #[must_use]
     #[inline]
-    fn with_addr(self, addr: usize) -> Self
+    pub(crate) fn with_addr<T>(ptr: *mut T, addr: usize) -> *mut T
     where
         T: Sized,
     {
@@ -295,23 +286,23 @@ impl<T> Strict for *mut T {
         // In the mean-time, this operation is defined to be "as if" it was
         // a wrapping_offset, so we can emulate it as such. This should properly
         // restore pointer provenance even under today's compiler.
-        let self_addr = self.addr() as isize;
+        let self_addr = self::addr(ptr) as isize;
         let dest_addr = addr as isize;
         let offset = dest_addr.wrapping_sub(self_addr);
 
         // This is the canonical desugarring of this operation,
         // but `pointer::cast` was only stabilized in 1.38.
         // self.cast::<u8>().wrapping_offset(offset).cast::<T>()
-        (self as *mut u8).wrapping_offset(offset) as *mut T
+        (ptr as *mut u8).wrapping_offset(offset) as *mut T
     }
 
     #[must_use]
     #[inline]
-    fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self
+    pub(crate) fn map_addr<T>(ptr: *mut T, f: impl FnOnce(usize) -> usize) -> *mut T
     where
         T: Sized,
     {
-        self.with_addr(f(self.addr()))
+        self::with_addr(ptr, f(addr(ptr)))
     }
 }
 
