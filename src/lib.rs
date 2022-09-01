@@ -1321,9 +1321,8 @@ pub mod sync {
         /// let mut value = cell.get_mut_or_try_init(|| -> Result<i32, ()> {
         ///     Ok(92)
         /// });
-        /// *value += 1;
-        /// assert_eq!(value, Ok(&mut 93));
-        /// assert_eq!(cell.get(), Some(&93))
+        /// assert_eq!(value, Ok(&mut 92));
+        /// assert_eq!(cell.get(), Some(&92))
         /// ```
         pub fn get_mut_or_try_init<F, E>(&mut self, f: F) -> Result<&mut T, E>
         where
@@ -1529,7 +1528,7 @@ pub mod sync {
         ///
         /// assert_eq!(Lazy::get_mut(&mut lazy), None);
         /// assert_eq!(&*lazy, &92);
-        /// assert_eq!(Lazy::get(&mut lazy), Some(&mut 92));
+        /// assert_eq!(Lazy::get_mut(&mut lazy), Some(&mut 92));
         /// ```
         pub fn get_mut(this: &mut Lazy<T, F>) -> Option<&mut T> {
             this.cell.get_mut()
