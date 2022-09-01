@@ -131,7 +131,7 @@ impl<T> OnceCell<T> {
     /// the contents are acquired by (synchronized to) this thread.
     pub(crate) unsafe fn get_mut_unchecked(&mut self) -> &mut T {
         debug_assert!(self.is_initialized());
-        let slot: &mut Option<T> = &mut *self.value.get_mut();
+        let slot: &mut Option<T> = &mut *self.value.get();
         match slot {
             Some(value) => value,
             // This unsafe does improve performance, see `examples/bench`.
