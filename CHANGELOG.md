@@ -9,6 +9,9 @@
 - Add extension to `async` and `sync` `OnceCell` mut API:
   - `get_mut_or_init`
   - `get_mut_or_try_init`
+- Add extension to `async` and `sync` `Lazy` mut API:
+  - `force_mut`
+  - `get_mut`
 
 
 ## 1.13.1
