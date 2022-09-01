@@ -15,6 +15,12 @@ mod unsync {
 
         c.get_or_init(|| panic!("Kabom!"));
         assert_eq!(c.get(), Some(&92));
+
+        let mut c = OnceCell::new();
+        assert!(c.get().is_none());
+        let mut_ref = c.get_mut_or_init(|| 92);
+        *mut_ref += 1;
+        assert_eq!(c.get(), Some(&93));
     }
 
     #[test]
@@ -262,6 +268,15 @@ mod sync {
     }
 
     #[test]
+    fn once_cell_get_mut_unchecked() {
+        let c = OnceCell::new();
+        c.set(92).unwrap();
+        unsafe {
+            assert_eq!(c.get_mut_unchecked(), &mut 92);
+        }
+    }
+
+    #[test]
     fn once_cell_drop() {
         static DROP_CNT: AtomicUsize = AtomicUsize::new(0);
         struct Dropper;
@@ -315,6 +330,20 @@ mod sync {
         assert_eq!(
             cell.get_or_try_init(|| Ok::<_, ()>("hello".to_string())),
             Ok(&"hello".to_string())
+        );
+        assert_eq!(cell.get(), Some(&"hello".to_string()));
+    }
+
+    #[test]
+    fn get_mut_or_try_init() {
+        let mut cell: OnceCell<String> = OnceCell::new();
+        assert!(cell.get().is_none());
+
+        assert_eq!(cell.get_mut_or_try_init(|| Err(())), Err(()));
+
+        assert_eq!(
+            cell.get_mut_or_try_init(|| Ok::<_, ()>("hello".to_string())),
+            Ok(&mut "hello".to_string())
         );
         assert_eq!(cell.get(), Some(&"hello".to_string()));
     }
