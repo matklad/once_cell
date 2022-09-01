@@ -526,6 +526,40 @@ pub mod unsync {
             })
         }
 
+        /// Like [`set`](Self::set), but also returns a mutable reference to the final cell value.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell = OnceCell::new();
+        /// assert!(cell.get_mut().is_none());
+        ///
+        /// assert_eq!(cell.try_insert_mut(92), Ok(&mut 92));
+        /// assert_eq!(cell.try_insert_mut(62), Err((&mut 92, 62)));
+        ///
+        /// assert!(cell.get_mut().is_some());
+        /// ```
+        pub fn try_insert_mut(&mut self, value: T) -> Result<&mut T, (&mut T, T)> {
+            // Sadly the only way to avoid double referencing is to use `is_some` and unwrap later on.
+            // Once [Polonius](https://github.com/rust-lang/polonius) hits stable this should be better with a `match` or `if let` block.
+            if self.get().is_some() {
+                // Safety, we already check if it some.
+                Err((self.get_mut().unwrap(), value))
+            } else {
+                let slot = unsafe { &mut *self.inner.get() };
+                // This is the only place where we set the slot, no races
+                // due to reentrancy/concurrency are possible, and we've
+                // checked that slot is currently `None`, so this write
+                // maintains the `inner`'s invariant.
+                *slot = Some(value);
+                Ok(match &mut *slot {
+                    Some(value) => value,
+                    None => unsafe { hint::unreachable_unchecked() },
+                })
+            }
+        }
+
         /// Gets the contents of the cell, initializing it with `f`
         /// if the cell was empty.
         ///
