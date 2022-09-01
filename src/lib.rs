@@ -592,6 +592,38 @@ pub mod unsync {
             }
         }
 
+        /// Gets the contents of the cell as mutable, initializing it with `f`
+        /// if the cell was empty.
+        ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`. Doing
+        /// so results in a panic.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell = OnceCell::new();
+        /// let value = cell.get_mut_or_init(|| 92);
+        /// assert_eq!(value, &92);
+        /// let value = cell.get_mut_or_init(|| unreachable!());
+        /// assert_eq!(value, &92);
+        /// ```
+        pub fn get_mut_or_init<F>(&mut self, f: F) -> &mut T
+        where
+            F: FnOnce() -> T,
+        {
+            enum Void {}
+            match self.get_mut_or_try_init(|| Ok::<T, Void>(f())) {
+                Ok(val) => val,
+                Err(void) => match void {},
+            }
+        }
+
         /// Gets the contents of the cell, initializing it with `f` if
         /// the cell was empty. If the cell was empty and `f` failed, an
         /// error is returned.
@@ -631,6 +663,49 @@ pub mod unsync {
             // better to panic, rather than to silently use an old value.
             assert!(self.set(val).is_ok(), "reentrant init");
             Ok(self.get().unwrap())
+        }
+
+        /// Gets the contents of the cell as mutable, initializing it with `f` if
+        /// the cell was empty. If the cell was empty and `f` failed, an
+        /// error is returned.
+        ///
+        /// # Panics
+        ///
+        /// If `f` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// It is an error to reentrantly initialize the cell from `f`. Doing
+        /// so results in a panic.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell = OnceCell::new();
+        /// assert_eq!(cell.get_mut_or_try_init(|| Err(())), Err(()));
+        /// assert!(cell.get().is_none());
+        /// let value = cell.get_mut_or_try_init(|| -> Result<i32, ()> {
+        ///     Ok(92)
+        /// });
+        /// assert_eq!(value, Ok(&mut 92));
+        /// assert_eq!(cell.get(), Some(&92))
+        /// ```
+        pub fn get_mut_or_try_init<F, E>(&mut self, f: F) -> Result<&mut T, E>
+        where
+            F: FnOnce() -> Result<T, E>,
+        {
+            let mut_ref = if self.get_mut().is_some() {
+                self.get_mut().unwrap()
+            } else {
+                let val = f()?;
+                // Note that *some* forms of reentrant initialization might lead to
+                // UB (see `reentrant_init` test). I believe that just removing this
+                // `assert`, while keeping `set/get` would be sound, but it seems
+                // better to panic, rather than to silently use an old value.
+                assert!(self.set(val).is_ok(), "reentrant init");
+                self.get_mut().unwrap()
+            };
+            Ok(mut_ref)
         }
 
         /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
