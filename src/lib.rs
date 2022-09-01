@@ -864,7 +864,7 @@ pub mod unsync {
         /// ```
         pub fn force_mut(this: &mut Lazy<T, F>) -> &mut T {
             Self::force(this);
-            this.cell.get_mut().unwrap_or_else(|| unreachable!())
+            Self::get_mut(this).unwrap_or_else(|| unreachable!())
         }
 
         /// Gets the reference to the result of this lazy value if
@@ -1460,6 +1460,23 @@ pub mod sync {
             })
         }
 
+        /// Forces the evaluation of this lazy value and
+        /// returns a mutable reference to the result. This is equivalent
+        /// to the `Deref` impl, but is explicit.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::Lazy;
+        ///
+        /// let mut lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::force_mut(&mut lazy), &mut 92);
+        /// ```
+        pub fn force_mut(this: &mut Lazy<T, F>) -> &mut T {
+            Self::force(this);
+            Self::get_mut(this).unwrap_or_else(|| unreachable!())
+        }
+
         /// Gets the reference to the result of this lazy value if
         /// it was initialized, otherwise returns `None`.
         ///
@@ -1475,6 +1492,23 @@ pub mod sync {
         /// ```
         pub fn get(this: &Lazy<T, F>) -> Option<&T> {
             this.cell.get()
+        }
+
+        /// Gets the reference to the result of this lazy value if
+        /// it was initialized, otherwise returns `None`.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::Lazy;
+        ///
+        /// let mut lazy = Lazy::new(|| 92);
+        ///
+        /// assert_eq!(Lazy::get_mut(&mut lazy), None);
+        /// assert_eq!(&*lazy, &92);
+        /// assert_eq!(Lazy::get(&mut lazy), Some(&mut 92));
+        /// ```
+        pub fn get_mut(this: &mut Lazy<T, F>) -> Option<&mut T> {
+            this.cell.get_mut()
         }
     }
 
