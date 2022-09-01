@@ -1160,6 +1160,30 @@ pub mod sync {
             }
         }
 
+        /// Like [`set`](Self::set), but also returns a mutable reference to the final cell value.
+        ///
+        /// # Example
+        ///
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let mut cell = OnceCell::new();
+        /// assert!(cell.get().is_none());
+        ///
+        /// assert_eq!(cell.try_insert_mut(92), Ok(&mut 92));
+        /// assert_eq!(cell.try_insert_mut(62), Err((&mut 92, 62)));
+        ///
+        /// assert!(cell.get().is_some());
+        /// ```
+        pub fn try_insert_mut(&mut self, value: T) -> Result<&mut T, (&mut T, T)> {
+            let mut value = Some(value);
+            let res = self.get_mut_or_init(|| unsafe { take_unchecked(&mut value) });
+            match value {
+                None => Ok(res),
+                Some(value) => Err((res, value)),
+            }
+        }
+
         /// Gets the contents of the cell, initializing it with `f` if the cell
         /// was empty.
         ///
