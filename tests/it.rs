@@ -307,7 +307,7 @@ mod sync {
 
     #[test]
     fn once_cell_get_mut_unchecked() {
-        let c = OnceCell::new();
+        let mut c = OnceCell::new();
         c.set(92).unwrap();
         unsafe {
             assert_eq!(c.get_mut_unchecked(), &mut 92);

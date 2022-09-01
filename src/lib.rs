@@ -1102,7 +1102,7 @@ pub mod sync {
         ///
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
-        pub unsafe fn get_mut_unchecked(&self) -> &mut T {
+        pub unsafe fn get_mut_unchecked(&mut self) -> &mut T {
             self.0.get_mut_unchecked()
         }
 
@@ -1334,7 +1334,7 @@ pub mod sync {
             }
             // Safe b/c value is initialized.
             debug_assert!(self.0.is_initialized());
-            Ok(unsafe { self.get_mut_unchecked() })
+            Ok(self.get_mut().unwrap_or_else(|| unreachable!()))
         }
 
         /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
