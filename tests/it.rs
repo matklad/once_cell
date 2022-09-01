@@ -144,6 +144,44 @@ mod unsync {
     }
 
     #[test]
+    fn lazy_force_mut() {
+        let called = Cell::new(0);
+        let mut x = Lazy::new(|| {
+            called.set(called.get() + 1);
+            92
+        });
+        assert_eq!(called.get(), 0);
+        Lazy::force_mut(&mut x);
+        assert_eq!(called.get(), 1);
+
+        let y = *x - 30;
+        assert_eq!(y, 62);
+        assert_eq!(called.get(), 1);
+
+        *x /= 2;
+        assert_eq!(*x, 46);
+        assert_eq!(called.get(), 1);
+    }
+    #[test]
+    fn lazy_get_mut() {
+        let called = Cell::new(0);
+        let mut x: Lazy<u32, _> = Lazy::new(|| {
+            called.set(called.get() + 1);
+            92
+        });
+
+        assert_eq!(called.get(), 0);
+        assert_eq!(*x, 92);
+
+        let mut_ref: &mut u32 = Lazy::get_mut(&mut x).unwrap();
+        assert_eq!(called.get(), 1);
+
+        *mut_ref /= 2;
+        assert_eq!(*x, 46);
+        assert_eq!(called.get(), 1);
+    }
+
+    #[test]
     fn lazy_default() {
         static CALLED: AtomicUsize = AtomicUsize::new(0);
 
