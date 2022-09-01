@@ -122,6 +122,26 @@ impl<T> OnceCell<T> {
         }
     }
 
+    /// Get a mutable  reference to the underlying value, without checking if the cell
+    /// is initialized.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the cell is in initialized state, and that
+    /// the contents are acquired by (synchronized to) this thread.
+    pub(crate) unsafe fn get_mut_unchecked(&mut self) -> &mut T {
+        debug_assert!(self.is_initialized());
+        let slot: &mut Option<T> = &mut *self.value.get_mut();
+        match slot {
+            Some(value) => value,
+            // This unsafe does improve performance, see `examples/bench`.
+            None => {
+                debug_assert!(false);
+                unreachable_unchecked()
+            }
+        }
+    }
+
     /// Gets the mutable reference to the underlying value.
     /// Returns `None` if the cell is empty.
     pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
