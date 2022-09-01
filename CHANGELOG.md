@@ -4,6 +4,13 @@
 
 -
 
+## 1.14.0
+
+- Add extension to `async` and `sync` `OnceCell` mut API:
+  - `get_mut_or_init`
+  - `get_mut_or_try_init`
+
+
 ## 1.13.1
 
 - Make implementation compliant with [strict provenance](https://github.com/rust-lang/rust/issues/95228).
