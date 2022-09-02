@@ -306,15 +306,6 @@ mod sync {
     }
 
     #[test]
-    fn once_cell_get_mut_unchecked() {
-        let mut c = OnceCell::new();
-        c.set(92).unwrap();
-        unsafe {
-            assert_eq!(c.get_mut_unchecked(), &mut 92);
-        }
-    }
-
-    #[test]
     fn once_cell_drop() {
         static DROP_CNT: AtomicUsize = AtomicUsize::new(0);
         struct Dropper;
