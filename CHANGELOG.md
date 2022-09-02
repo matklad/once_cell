@@ -6,7 +6,7 @@
 
 ## 1.14.0
 
-- Add extension to `async` and `sync` `Lazy` mut API:
+- Add extension to `unsync` and `sync` `Lazy` mut API:
   - `force_mut`
   - `get_mut`
 
