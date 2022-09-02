@@ -156,6 +156,7 @@ mod unsync {
         assert_eq!(*x, 46);
         assert_eq!(called.get(), 1);
     }
+
     #[test]
     fn lazy_get_mut() {
         let called = Cell::new(0);
