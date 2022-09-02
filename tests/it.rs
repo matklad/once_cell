@@ -145,7 +145,7 @@ mod unsync {
             92
         });
         assert_eq!(called.get(), 0);
-        let mut v = Lazy::force_mut(&mut x);
+        let v = Lazy::force_mut(&mut x);
         assert_eq!(called.get(), 1);
 
         *v /= 2;
