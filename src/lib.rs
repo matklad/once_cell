@@ -453,6 +453,7 @@ pub mod unsync {
         /// Gets a reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
+        #[inline]
         pub fn get(&self) -> Option<&T> {
             // Safe due to `inner`'s invariant
             unsafe { &*self.inner.get() }.as_ref()
@@ -474,6 +475,7 @@ pub mod unsync {
         /// *cell.get_mut().unwrap() = 93;
         /// assert_eq!(cell.get(), Some(&93));
         /// ```
+        #[inline]
         pub fn get_mut(&mut self) -> Option<&mut T> {
             // Safe because we have unique access
             unsafe { &mut *self.inner.get() }.as_mut()
@@ -486,6 +488,7 @@ pub mod unsync {
         ///
         /// Caller must ensure that the cell is in initialized state.
         #[cfg(feature = "critical-section")]
+        #[inline]
         pub(crate) unsafe fn get_unchecked(&self) -> &T {
             crate::unwrap_unchecked(self.get())
         }
@@ -985,6 +988,7 @@ pub mod sync {
         /// cell.set(92).unwrap();
         /// cell = OnceCell::new();
         /// ```
+        #[inline]
         pub fn get_mut(&mut self) -> Option<&mut T> {
             self.0.get_mut()
         }
@@ -996,6 +1000,7 @@ pub mod sync {
         ///
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
+        #[inline]
         pub unsafe fn get_unchecked(&self) -> &T {
             self.0.get_unchecked()
         }
@@ -1181,6 +1186,7 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
+        #[inline]
         pub fn into_inner(self) -> Option<T> {
             self.0.into_inner()
         }
