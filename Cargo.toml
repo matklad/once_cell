@@ -33,13 +33,13 @@ parking_lot_core = { version = "0.9.3", optional = true, default_features = fals
 atomic-polyfill = { version = "1", optional = true }
 
 # Uses `critical-section` to implement `once_cell::sync::OnceCell`.
-critical-section = { version = "1.1", optional = true }
+critical_section = { package = "critical-section", version = "1.1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
 crossbeam-utils = "0.8.7"
 regex =  "1.2.0"
-critical-section = { version = "1.1", features = ["std"] }
+critical_section = { package = "critical-section", version = "1.1", features = ["std"] }
 
 [features]
 default = ["std"]
@@ -57,7 +57,7 @@ sync = []
 
 parking_lot = ["parking_lot_core"]
 
-critical-section = ["dep:critical-section", "sync"]
+critical-section = ["critical_section", "sync"]
 
 [[example]]
 name = "bench"
