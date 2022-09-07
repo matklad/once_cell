@@ -1,13 +1,11 @@
 use core::panic::{RefUnwindSafe, UnwindSafe};
 
-#[cfg(feature = "atomic-polyfill")]
 use atomic_polyfill::{AtomicBool, Ordering};
 use critical_section::{CriticalSection, Mutex};
 
 use crate::unsync::OnceCell as UnsyncOnceCell;
 
 pub(crate) struct OnceCell<T> {
-    #[cfg(feature = "atomic-polyfill")]
     initialized: AtomicBool,
     value: Mutex<UnsyncOnceCell<T>>,
 }
@@ -25,16 +23,11 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
-        OnceCell {
-            #[cfg(feature = "atomic-polyfill")]
-            initialized: AtomicBool::new(false),
-            value: Mutex::new(UnsyncOnceCell::new()),
-        }
+        OnceCell { initialized: AtomicBool::new(false), value: Mutex::new(UnsyncOnceCell::new()) }
     }
 
     pub(crate) const fn with_value(value: T) -> OnceCell<T> {
         OnceCell {
-            #[cfg(feature = "atomic-polyfill")]
             initialized: AtomicBool::new(true),
             value: Mutex::new(UnsyncOnceCell::with_value(value)),
         }
@@ -42,13 +35,7 @@ impl<T> OnceCell<T> {
 
     #[inline]
     pub(crate) fn is_initialized(&self) -> bool {
-        #[cfg(feature = "atomic-polyfill")]
-        {
-            self.initialized.load(Ordering::Acquire)
-        }
-
-        #[cfg(not(feature = "atomic-polyfill"))]
-        critical_section::with(|cs| self.value.borrow(cs).get().is_some())
+        self.initialized.load(Ordering::Acquire)
     }
 
     #[cold]
@@ -59,7 +46,6 @@ impl<T> OnceCell<T> {
         critical_section::with(|cs| {
             let cell = self.value.borrow(cs);
             cell.get_or_try_init(f).map(|_| {
-                #[cfg(feature = "atomic-polyfill")]
                 self.initialized.store(true, Ordering::Release);
 
                 ()

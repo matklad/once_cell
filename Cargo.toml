@@ -57,7 +57,7 @@ sync = []
 
 parking_lot = ["parking_lot_core"]
 
-critical-section = ["critical_section", "sync"]
+critical-section = ["critical_section", "atomic-polyfill", "sync"]
 
 [[example]]
 name = "bench"
