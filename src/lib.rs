@@ -959,6 +959,7 @@ pub mod sync {
         /// assert_eq!(*value, 92);
         /// t.join().unwrap();
         /// ```
+        #[cfg(not(feature = "critical-section"))]
         pub fn wait(&self) -> &T {
             if !self.0.is_initialized() {
                 self.0.wait()

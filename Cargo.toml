@@ -89,3 +89,6 @@ required-features = ["std"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[patch.crates-io]
+critical-section = { git = "https://github.com/reitermarkus/critical-section", branch = "lock-poisoning" }
