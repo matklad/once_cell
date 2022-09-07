@@ -207,7 +207,7 @@ mod unsync {
     }
 
     #[test]
-    #[cfg(all(feature = "std", not(feature = "critical-section")))]
+    #[cfg(feature = "std")]
     fn lazy_poisoning() {
         let x: Lazy<String> = Lazy::new(|| panic!("kaboom"));
         for _ in 0..2 {
@@ -252,6 +252,9 @@ mod unsync {
 #[cfg(feature = "sync")]
 mod sync {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+    #[cfg(not(feature = "critical-section"))]
+    use std::sync::Barrier;
 
     #[cfg(feature = "critical-section")]
     use core::cell::Cell;
@@ -372,7 +375,6 @@ mod sync {
     #[cfg(not(feature = "critical-section"))]
     #[test]
     fn get_or_init_stress() {
-        use std::sync::Barrier;
         let n_threads = if cfg!(miri) { 30 } else { 1_000 };
         let n_cells = if cfg!(miri) { 30 } else { 1_000 };
         let cells: Vec<_> = std::iter::repeat_with(|| (Barrier::new(n_threads), OnceCell::new()))
@@ -630,7 +632,6 @@ mod sync {
         assert_eq!(fib[5], 8)
     }
 
-    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn once_cell_does_not_leak_partially_constructed_boxes() {
         let n_tries = if cfg!(miri) { 10 } else { 100 };
@@ -660,8 +661,6 @@ mod sync {
     #[cfg(not(feature = "critical-section"))]
     #[test]
     fn get_does_not_block() {
-        use std::sync::Barrier;
-
         let cell = OnceCell::new();
         let barrier = Barrier::new(2);
         scope(|scope| {
