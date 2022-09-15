@@ -1,95 +1,116 @@
-use std::env;
+#[cfg(test)]
+mod tidy;
 
-use xaction::{cargo_toml, cmd, cp, git, push_rustup_toolchain, rm_rf, section, Result};
+use std::time::Instant;
+
+use xshell::{cmd, Shell};
 
 const MSRV: &str = "1.36.0";
 
-fn main() {
-    if let Err(err) = try_main() {
-        eprintln!("error: {}", err);
-        std::process::exit(1)
-    }
-}
+fn main() -> xshell::Result<()> {
+    let sh = Shell::new()?;
 
-fn try_main() -> Result<()> {
-    let subcommand = std::env::args().nth(1);
-    match subcommand {
-        Some(it) if it == "ci" => (),
-        _ => {
-            print_usage();
-            Err("invalid arguments")?
-        }
-    }
-
-    let cargo_toml = cargo_toml()?;
+    let _e = push_toolchain(&sh, "stable")?;
 
     {
-        let _s = section("TEST_STABLE");
-        let _t = push_rustup_toolchain("stable");
-        cmd!("cargo test --features unstable").run()?;
-        cmd!("cargo test --features unstable --release").run()?;
+        let _s = section("BUILD");
+        cmd!(sh, "cargo test --workspace --no-run").run()?;
+    }
 
-        // Skip doctests, they need `std`
-        cmd!("cargo test --features unstable --no-default-features --test it").run()?;
+    {
+        let _s = section("TEST");
 
-        cmd!("cargo test --features 'unstable std parking_lot' --no-default-features").run()?;
-        cmd!("cargo test --features 'unstable std parking_lot' --no-default-features --release")
+        for &release in &[None, Some("--release")] {
+            cmd!(sh, "cargo test --features unstable {release...}").run()?;
+            cmd!(
+                sh,
+                "cargo test --no-default-features --features unstable,std,parking_lot {release...}"
+            )
             .run()?;
+        }
 
-        cmd!("cargo test --features 'unstable alloc' --no-default-features --test it").run()?;
-        cmd!("cargo test --features 'unstable std parking_lot alloc' --no-default-features")
-            .run()?;
+        // Skip doctests for no_std tests as those don't work
+        cmd!(sh, "cargo test --no-default-features --features unstable --test it").run()?;
+        cmd!(sh, "cargo test --no-default-features --features unstable,alloc --test it").run()?;
     }
 
     {
         let _s = section("TEST_BETA");
-        let _t = push_rustup_toolchain("beta");
-        cmd!("cargo test --features unstable").run()?;
-        cmd!("cargo test --features unstable --release").run()?;
+        let _e = push_toolchain(&sh, "beta")?;
+        cmd!(sh, "cargo test --features unstable").run()?;
     }
 
     {
         let _s = section("TEST_MSRV");
-        let _t = push_rustup_toolchain(MSRV);
-        cp("Cargo.lock.msrv", "Cargo.lock")?;
-        cmd!("cargo build").run()?;
+        let _e = push_toolchain(&sh, MSRV)?;
+        sh.copy_file("Cargo.lock.msrv", "Cargo.lock")?;
+        cmd!(sh, "cargo build").run()?;
     }
 
     {
         let _s = section("TEST_MIRI");
-        rm_rf("./target")?;
+        let miri_nightly= cmd!(sh, "curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri").read()?;
+        let _e = push_toolchain(&sh, &format!("nightly-{}", miri_nightly))?;
 
-        let miri_nightly= cmd!("curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri").read()?;
-        let _t = push_rustup_toolchain(&format!("nightly-{}", miri_nightly));
+        sh.remove_path("./target")?;
 
-        cmd!("rustup component add miri").run()?;
-        cmd!("cargo miri setup").run()?;
-        cmd!("cargo miri test --features unstable").run()?;
+        cmd!(sh, "rustup component add miri").run()?;
+        cmd!(sh, "cargo miri setup").run()?;
+        cmd!(sh, "cargo miri test --features unstable").run()?;
     }
-
-    let version = cargo_toml.version()?;
-    let tag = format!("v{}", version);
-
-    let dry_run =
-        env::var("CI").is_err() || git::has_tag(&tag)? || git::current_branch()? != "master";
-    xaction::set_dry_run(dry_run);
 
     {
         let _s = section("PUBLISH");
-        cargo_toml.publish()?;
-        git::tag(&tag)?;
-        git::push_tags()?;
+
+        let version = cmd!(sh, "cargo pkgid").read()?.rsplit_once('#').unwrap().1.to_string();
+        let tag = format!("v{version}");
+
+        let current_branch = cmd!(sh, "git branch --show-current").read()?;
+        let has_tag = cmd!(sh, "git tag --list").read()?.lines().any(|it| it.trim() == tag);
+        let dry_run = sh.var("CI").is_err() || has_tag || current_branch != "master";
+        eprintln!("Publishing{}!", if dry_run { " (dry run)" } else { "" });
+
+        let dry_run_arg = if dry_run { Some("--dry-run") } else { None };
+        cmd!(sh, "cargo publish {dry_run_arg...}").run()?;
+        if dry_run {
+            eprintln!("{}", cmd!(sh, "git tag {tag}"));
+            eprintln!("{}", cmd!(sh, "git push --tags"));
+        } else {
+            cmd!(sh, "git tag {tag}").run()?;
+            cmd!(sh, "git push --tags").run()?;
+        }
     }
     Ok(())
 }
 
-fn print_usage() {
-    eprintln!(
-        "\
-Usage: cargo run -p xtask <SUBCOMMAND>
+fn push_toolchain<'a>(
+    sh: &'a xshell::Shell,
+    toolchain: &str,
+) -> xshell::Result<xshell::PushEnv<'a>> {
+    cmd!(sh, "rustup toolchain install {toolchain} --no-self-update").run()?;
+    let res = sh.push_env("RUSTUP_TOOLCHAIN", toolchain);
+    cmd!(sh, "rustc --version").run()?;
+    Ok(res)
+}
 
-SUBCOMMANDS:
-    ci
-"
-    )
+fn section(name: &'static str) -> impl Drop {
+    println!("::group::{name}");
+    let start = Instant::now();
+    defer(move || {
+        let elapsed = start.elapsed();
+        eprintln!("{name}: {elapsed:.2?}");
+        println!("::endgroup::");
+    })
+}
+
+fn defer<F: FnOnce()>(f: F) -> impl Drop {
+    struct D<F: FnOnce()>(Option<F>);
+    impl<F: FnOnce()> Drop for D<F> {
+        fn drop(&mut self) {
+            if let Some(f) = self.0.take() {
+                f()
+            }
+        }
+    }
+    D(Some(f))
 }
