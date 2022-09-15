@@ -267,7 +267,7 @@
 //!
 //! # Minimum Supported `rustc` Version
 //!
-//! This crate's minimum supported `rustc` version is `1.36.0`.
+//! This crate's minimum supported `rustc` version is `1.56.0`.
 //!
 //! If only the `std` feature is enabled, MSRV will be updated conservatively.
 //! When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.

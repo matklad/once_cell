@@ -2,7 +2,7 @@
 
 ## Unreleased
 
--
+- Increase minimal supported Rust version to 1.56.0.
 
 ## 1.14.0
 
