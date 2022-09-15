@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+-
+
+## 1.15.0
+
 - Increase minimal supported Rust version to 1.56.0.
 - Implement `UnwindSafe` even if the `std` feature is disabled.
 
