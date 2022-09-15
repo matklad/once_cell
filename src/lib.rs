@@ -267,7 +267,7 @@
 //!
 //! # Minimum Supported `rustc` Version
 //!
-//! This crate's minimum supported `rustc` version is `1.36.0`.
+//! This crate's minimum supported `rustc` version is `1.56.0`.
 //!
 //! If only the `std` feature is enabled, MSRV will be updated conservatively.
 //! When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.
@@ -348,10 +348,8 @@ pub mod unsync {
         cell::{Cell, UnsafeCell},
         fmt, hint, mem,
         ops::{Deref, DerefMut},
+        panic::{RefUnwindSafe, UnwindSafe},
     };
-
-    #[cfg(feature = "std")]
-    use std::panic::{RefUnwindSafe, UnwindSafe};
 
     /// A cell which can be written to only once. It is not thread safe.
     ///
@@ -382,9 +380,7 @@ pub mod unsync {
     // `&unsync::OnceCell` to sneak a `T` through `catch_unwind`,
     // by initializing the cell in closure and extracting the value in the
     // `Drop`.
-    #[cfg(feature = "std")]
     impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
-    #[cfg(feature = "std")]
     impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
     impl<T> Default for OnceCell<T> {
@@ -680,7 +676,6 @@ pub mod unsync {
         init: Cell<Option<F>>,
     }
 
-    #[cfg(feature = "std")]
     impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
 
     impl<T: fmt::Debug, F> fmt::Debug for Lazy<T, F> {
@@ -1225,7 +1220,6 @@ pub mod sync {
     unsafe impl<T, F: Send> Sync for Lazy<T, F> where OnceCell<T>: Sync {}
     // auto-derived `Send` impl is OK.
 
-    #[cfg(feature = "std")]
     impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
 
     impl<T, F> Lazy<T, F> {
