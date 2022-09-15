@@ -3,7 +3,7 @@ name = "once_cell"
 version = "1.14.0"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
-edition = "2018"
+edition = "2021"
 rust-version = "1.56"
 
 description = "Single assignment cells and lazy values."
