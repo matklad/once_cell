@@ -329,11 +329,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
-use core as lib;
-#[cfg(feature = "std")]
-use std as lib;
-
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
@@ -351,12 +346,13 @@ mod imp;
 
 /// Single-threaded version of `OnceCell`.
 pub mod unsync {
-    use super::lib::{
+    use core::{
         cell::{Cell, UnsafeCell},
         fmt, mem,
         ops::{Deref, DerefMut},
         panic::{RefUnwindSafe, UnwindSafe},
     };
+
     use super::unwrap_unchecked;
 
     /// A cell which can be written to only once. It is not thread safe.
@@ -836,15 +832,14 @@ pub mod unsync {
 /// Thread-safe, blocking version of `OnceCell`.
 #[cfg(feature = "sync")]
 pub mod sync {
-    use super::lib::{
+    use core::{
         cell::Cell,
         fmt, mem,
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
 
-    use super::imp::OnceCell as Imp;
-    use super::take_unchecked;
+    use super::{imp::OnceCell as Imp, take_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///

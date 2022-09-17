@@ -47,8 +47,6 @@ impl<T> OnceCell<T> {
             let cell = self.value.borrow(cs);
             cell.get_or_try_init(f).map(|_| {
                 self.initialized.store(true, Ordering::Release);
-
-                ()
             })
         })
     }
