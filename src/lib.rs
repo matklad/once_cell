@@ -336,11 +336,11 @@ extern crate alloc;
 #[path = "imp_cs.rs"]
 mod imp;
 
-#[cfg(all(feature = "std", feature = "parking_lot", not(feature = "critical-section")))]
+#[cfg(all(feature = "std", feature = "parking_lot"))]
 #[path = "imp_pl.rs"]
 mod imp;
 
-#[cfg(all(feature = "std", not(feature = "parking_lot"), not(feature = "critical-section")))]
+#[cfg(all(feature = "std", not(feature = "parking_lot")))]
 #[path = "imp_std.rs"]
 mod imp;
 
