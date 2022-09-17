@@ -337,17 +337,15 @@ use std as lib;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(feature = "critical-section")]
+#[cfg(all(feature = "critical-section", not(feature = "std")))]
 #[path = "imp_cs.rs"]
 mod imp;
 
-#[cfg(all(feature = "std", not(feature = "critical-section")))]
-#[cfg(feature = "parking_lot")]
+#[cfg(all(feature = "std", feature = "parking_lot", not(feature = "critical-section")))]
 #[path = "imp_pl.rs"]
 mod imp;
 
-#[cfg(all(feature = "std", not(feature = "critical-section")))]
-#[cfg(not(feature = "parking_lot"))]
+#[cfg(all(feature = "std", not(feature = "parking_lot"), not(feature = "critical-section")))]
 #[path = "imp_std.rs"]
 mod imp;
 
