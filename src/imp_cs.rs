@@ -3,11 +3,13 @@ use core::panic::{RefUnwindSafe, UnwindSafe};
 use atomic_polyfill::{AtomicBool, Ordering};
 use critical_section::{CriticalSection, Mutex};
 
-use crate::unsync::OnceCell as UnsyncOnceCell;
+use crate::unsync;
 
 pub(crate) struct OnceCell<T> {
     initialized: AtomicBool,
-    value: Mutex<UnsyncOnceCell<T>>,
+    // Use `unsync::OnceCell` internally since `Mutex` does not provide
+    // interior mutability and to be able to re-use `get_or_try_init`.
+    value: Mutex<unsync::OnceCell<T>>,
 }
 
 // Why do we need `T: Send`?
@@ -23,13 +25,13 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
-        OnceCell { initialized: AtomicBool::new(false), value: Mutex::new(UnsyncOnceCell::new()) }
+        OnceCell { initialized: AtomicBool::new(false), value: Mutex::new(unsync::OnceCell::new()) }
     }
 
     pub(crate) const fn with_value(value: T) -> OnceCell<T> {
         OnceCell {
             initialized: AtomicBool::new(true),
-            value: Mutex::new(UnsyncOnceCell::with_value(value)),
+            value: Mutex::new(unsync::OnceCell::with_value(value)),
         }
     }
 
