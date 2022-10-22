@@ -269,7 +269,7 @@
 //!
 //! This crate's minimum supported `rustc` version is `1.56.0`.
 //!
-//! If only the `std` feature is enabled, MSRV will be updated conservatively.
+//! If only the `std` feature is enabled, MSRV will be updated conservatively, supporting at least latest 8 versions of the compiler.
 //! When using other features, like `parking_lot`, MSRV might be updated more frequently, up to the latest stable.
 //! In both cases, increasing MSRV is *not* considered a semver-breaking change.
 //!
