@@ -1,6 +1,5 @@
 use std::{
     cell::UnsafeCell,
-    hint,
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicU8, Ordering},
 };
@@ -101,15 +100,8 @@ impl<T> OnceCell<T> {
     /// the contents are acquired by (synchronized to) this thread.
     pub(crate) unsafe fn get_unchecked(&self) -> &T {
         debug_assert!(self.is_initialized());
-        let slot: &Option<T> = &*self.value.get();
-        match slot {
-            Some(value) => value,
-            // This unsafe does improve performance, see `examples/bench`.
-            None => {
-                debug_assert!(false);
-                hint::unreachable_unchecked()
-            }
-        }
+        let slot = &*self.value.get();
+        crate::unwrap_unchecked(slot.as_ref())
     }
 
     /// Gets the mutable reference to the underlying value.

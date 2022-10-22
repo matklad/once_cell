@@ -332,13 +332,15 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(feature = "std")]
-#[cfg(feature = "parking_lot")]
+#[cfg(all(feature = "critical-section", not(feature = "std")))]
+#[path = "imp_cs.rs"]
+mod imp;
+
+#[cfg(all(feature = "std", feature = "parking_lot"))]
 #[path = "imp_pl.rs"]
 mod imp;
 
-#[cfg(feature = "std")]
-#[cfg(not(feature = "parking_lot"))]
+#[cfg(all(feature = "std", not(feature = "parking_lot")))]
 #[path = "imp_std.rs"]
 mod imp;
 
@@ -346,10 +348,12 @@ mod imp;
 pub mod unsync {
     use core::{
         cell::{Cell, UnsafeCell},
-        fmt, hint, mem,
+        fmt, mem,
         ops::{Deref, DerefMut},
         panic::{RefUnwindSafe, UnwindSafe},
     };
+
+    use super::unwrap_unchecked;
 
     /// A cell which can be written to only once. It is not thread safe.
     ///
@@ -442,6 +446,7 @@ pub mod unsync {
         /// Gets a reference to the underlying value.
         ///
         /// Returns `None` if the cell is empty.
+        #[inline]
         pub fn get(&self) -> Option<&T> {
             // Safe due to `inner`'s invariant
             unsafe { &*self.inner.get() }.as_ref()
@@ -463,9 +468,22 @@ pub mod unsync {
         /// *cell.get_mut().unwrap() = 93;
         /// assert_eq!(cell.get(), Some(&93));
         /// ```
+        #[inline]
         pub fn get_mut(&mut self) -> Option<&mut T> {
             // Safe because we have unique access
             unsafe { &mut *self.inner.get() }.as_mut()
+        }
+
+        /// Get the reference to the underlying value, without checking if the
+        /// cell is initialized.
+        ///
+        /// # Safety
+        ///
+        /// Caller must ensure that the cell is in initialized state.
+        #[cfg(feature = "critical-section")]
+        #[inline]
+        pub(crate) unsafe fn get_unchecked(&self) -> &T {
+            crate::unwrap_unchecked(self.get())
         }
 
         /// Sets the contents of this cell to `value`.
@@ -510,16 +528,14 @@ pub mod unsync {
             if let Some(old) = self.get() {
                 return Err((old, value));
             }
+
             let slot = unsafe { &mut *self.inner.get() };
             // This is the only place where we set the slot, no races
             // due to reentrancy/concurrency are possible, and we've
             // checked that slot is currently `None`, so this write
             // maintains the `inner`'s invariant.
             *slot = Some(value);
-            Ok(match &*slot {
-                Some(value) => value,
-                None => unsafe { hint::unreachable_unchecked() },
-            })
+            Ok(unsafe { unwrap_unchecked(slot.as_ref()) })
         }
 
         /// Gets the contents of the cell, initializing it with `f`
@@ -592,7 +608,7 @@ pub mod unsync {
             // `assert`, while keeping `set/get` would be sound, but it seems
             // better to panic, rather than to silently use an old value.
             assert!(self.set(val).is_ok(), "reentrant init");
-            Ok(self.get().unwrap())
+            Ok(unsafe { unwrap_unchecked(self.get()) })
         }
 
         /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
@@ -814,16 +830,16 @@ pub mod unsync {
 }
 
 /// Thread-safe, blocking version of `OnceCell`.
-#[cfg(feature = "std")]
+#[cfg(feature = "sync")]
 pub mod sync {
-    use std::{
+    use core::{
         cell::Cell,
         fmt, mem,
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
 
-    use crate::{imp::OnceCell as Imp, take_unchecked};
+    use super::{imp::OnceCell as Imp, take_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -942,8 +958,9 @@ pub mod sync {
         /// // Will return 92, but might block until the other thread does `.set`.
         /// let value: &u32 = cell.wait();
         /// assert_eq!(*value, 92);
-        /// t.join().unwrap();;
+        /// t.join().unwrap();
         /// ```
+        #[cfg(not(feature = "critical-section"))]
         pub fn wait(&self) -> &T {
             if !self.0.is_initialized() {
                 self.0.wait()
@@ -969,6 +986,7 @@ pub mod sync {
         /// cell.set(92).unwrap();
         /// cell = OnceCell::new();
         /// ```
+        #[inline]
         pub fn get_mut(&mut self) -> Option<&mut T> {
             self.0.get_mut()
         }
@@ -980,6 +998,7 @@ pub mod sync {
         ///
         /// Caller must ensure that the cell is in initialized state, and that
         /// the contents are acquired by (synchronized to) this thread.
+        #[inline]
         pub unsafe fn get_unchecked(&self) -> &T {
             self.0.get_unchecked()
         }
@@ -1109,6 +1128,7 @@ pub mod sync {
             if let Some(value) = self.get() {
                 return Ok(value);
             }
+
             self.0.initialize(f)?;
 
             // Safe b/c value is initialized.
@@ -1164,6 +1184,7 @@ pub mod sync {
         /// cell.set("hello".to_string()).unwrap();
         /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
         /// ```
+        #[inline]
         pub fn into_inner(self) -> Option<T> {
             self.0.into_inner()
         }
@@ -1356,13 +1377,19 @@ pub mod sync {
 #[cfg(feature = "race")]
 pub mod race;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "sync")]
+#[inline]
 unsafe fn take_unchecked<T>(val: &mut Option<T>) -> T {
-    match val.take() {
-        Some(it) => it,
+    unwrap_unchecked(val.take())
+}
+
+#[inline]
+unsafe fn unwrap_unchecked<T>(val: Option<T>) -> T {
+    match val {
+        Some(value) => value,
         None => {
             debug_assert!(false);
-            std::hint::unreachable_unchecked()
+            core::hint::unreachable_unchecked()
         }
     }
 }

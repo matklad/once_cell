@@ -249,9 +249,15 @@ mod unsync {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "sync")]
 mod sync {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+    #[cfg(not(feature = "critical-section"))]
+    use std::sync::Barrier;
+
+    #[cfg(feature = "critical-section")]
+    use core::cell::Cell;
 
     use crossbeam_utils::thread::scope;
 
@@ -354,6 +360,7 @@ mod sync {
         assert_eq!(cell.get(), Some(&"hello".to_string()));
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn wait() {
         let cell: OnceCell<String> = OnceCell::new();
@@ -365,9 +372,9 @@ mod sync {
         .unwrap();
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn get_or_init_stress() {
-        use std::sync::Barrier;
         let n_threads = if cfg!(miri) { 30 } else { 1_000 };
         let n_cells = if cfg!(miri) { 30 } else { 1_000 };
         let cells: Vec<_> = std::iter::repeat_with(|| (Barrier::new(n_threads), OnceCell::new()))
@@ -430,6 +437,7 @@ mod sync {
 
     #[test]
     #[cfg_attr(miri, ignore)] // miri doesn't support processes
+    #[cfg(not(feature = "critical-section"))]
     fn reentrant_init() {
         let examples_dir = {
             let mut exe = std::env::current_exe().unwrap();
@@ -455,6 +463,20 @@ mod sync {
                 let _ = self.child.kill();
             }
         }
+    }
+
+    #[cfg(feature = "critical-section")]
+    #[test]
+    #[should_panic(expected = "reentrant init")]
+    fn reentrant_init() {
+        let x: OnceCell<Box<i32>> = OnceCell::new();
+        let dangling_ref: Cell<Option<&i32>> = Cell::new(None);
+        x.get_or_init(|| {
+            let r = x.get_or_init(|| Box::new(92));
+            dangling_ref.set(Some(r));
+            Box::new(62)
+        });
+        eprintln!("use after free: {:?}", dangling_ref.get().unwrap());
     }
 
     #[test]
@@ -636,10 +658,9 @@ mod sync {
         }
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn get_does_not_block() {
-        use std::sync::Barrier;
-
         let cell = OnceCell::new();
         let barrier = Barrier::new(2);
         scope(|scope| {
@@ -671,12 +692,11 @@ mod sync {
 
 #[cfg(feature = "race")]
 mod race {
+    #[cfg(not(feature = "critical-section"))]
+    use std::sync::Barrier;
     use std::{
         num::NonZeroUsize,
-        sync::{
-            atomic::{AtomicUsize, Ordering::SeqCst},
-            Barrier,
-        },
+        sync::atomic::{AtomicUsize, Ordering::SeqCst},
     };
 
     use crossbeam_utils::thread::scope;
@@ -728,6 +748,7 @@ mod race {
         assert_eq!(cell.get(), Some(val1));
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn once_non_zero_usize_first_wins() {
         let val1 = NonZeroUsize::new(92).unwrap();
@@ -807,12 +828,16 @@ mod race {
 
 #[cfg(all(feature = "race", feature = "alloc"))]
 mod race_once_box {
+    #[cfg(not(feature = "critical-section"))]
+    use std::sync::Barrier;
     use std::sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
-        Arc, Barrier,
+        Arc,
     };
 
+    #[cfg(not(feature = "critical-section"))]
     use crossbeam_utils::thread::scope;
+
     use once_cell::race::OnceBox;
 
     #[derive(Default)]
@@ -842,6 +867,7 @@ mod race_once_box {
         }
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn once_box_smoke_test() {
         let heap = Heap::default();
@@ -896,6 +922,7 @@ mod race_once_box {
         assert_eq!(heap.total(), 0);
     }
 
+    #[cfg(not(feature = "critical-section"))]
     #[test]
     fn once_box_first_wins() {
         let cell = OnceBox::new();
