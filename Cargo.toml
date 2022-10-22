@@ -1,6 +1,6 @@
 [package]
 name = "once_cell"
-version = "1.15.0"
+version = "1.16.0-pre.1"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
@@ -20,19 +20,10 @@ exclude = ["*.png", "*.svg", "/Cargo.lock.msrv", "rustfmt.toml"]
 members = ["xtask"]
 
 [dependencies]
-# Uses parking_lot to implement once_cell::sync::OnceCell.
-# This makes no speed difference, but makes each OnceCell<T>
-# up to 16 bytes smaller, depending on the size of the T.
+# These optional dependencies are considered private impl details,
+# only features from `[features]` table are a part of semver-guarded API.
 parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
-
-# To be used in order to enable the race feature on targets
-# that do not have atomics
-# *Warning:* This can be unsound. Please read the README of
-# [atomic-polyfill](https://github.com/embassy-rs/atomic-polyfill)
-# and make sure you understand all the implications
-atomic-polyfill = { version = "1", optional = true }
-
-# Uses `critical-section` to implement `once_cell::sync::OnceCell`.
+atomic_polyfill = { package = "atomic-polyfill", version = "1", optional = true }
 critical_section = { package = "critical-section", version = "1", optional = true }
 
 [dev-dependencies]
@@ -43,21 +34,32 @@ critical_section = { package = "critical-section", version = "1.1.1", features =
 
 [features]
 default = ["std"]
+
 # Enables `once_cell::sync` module.
-std = ["alloc", "sync"]
+std = ["alloc"]
+
 # Enables `once_cell::race::OnceBox` type.
 alloc = ["race"]
+
 # Enables `once_cell::race` module.
 race = []
+
+# Uses parking_lot to implement once_cell::sync::OnceCell.
+# This makes no speed difference, but makes each OnceCell<T>
+# up to 16 bytes smaller, depending on the size of the T.
+parking_lot = ["parking_lot_core"]
+
+# Uses `critical-section` to implement `sync` and `race` modules. in
+# `#![no_std]` mode. Please read `critical-section` docs carefully
+# before enabling this feature.
+critical-section = ["critical_section", "atomic_polyfill" ]
+
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
 unstable = []
 
-sync = []
-
-parking_lot = ["parking_lot_core"]
-
-critical-section = ["critical_section", "atomic-polyfill", "sync"]
+# Only for backwards compatibility.
+atomic-polyfill = ["critical-section"]
 
 [[example]]
 name = "bench"

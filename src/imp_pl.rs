@@ -58,7 +58,7 @@ impl<T> OnceCell<T> {
             //   but that is more complicated
             // - finally, if it returns Ok, we store the value and store the flag with
             //   `Release`, which synchronizes with `Acquire`s.
-            let f = unsafe { crate::take_unchecked(&mut f) };
+            let f = unsafe { crate::unwrap_unchecked(f.take()) };
             match f() {
                 Ok(value) => unsafe {
                     // Safe b/c we have a unique access and no panic may happen

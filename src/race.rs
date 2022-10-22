@@ -19,9 +19,9 @@
 //! `Acquire` and `Release` have very little performance overhead on most
 //! architectures versus `Relaxed`.
 
-#[cfg(feature = "atomic-polyfill")]
+#[cfg(feature = "critical-section")]
 use atomic_polyfill as atomic;
-#[cfg(not(feature = "atomic-polyfill"))]
+#[cfg(not(feature = "critical-section"))]
 use core::sync::atomic;
 
 use atomic::{AtomicUsize, Ordering};

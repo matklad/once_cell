@@ -34,7 +34,7 @@ fn main() -> xshell::Result<()> {
         cmd!(sh, "cargo test --no-default-features --features unstable,alloc --test it").run()?;
 
         cmd!(sh, "cargo test --no-default-features --features critical-section").run()?;
-        cmd!(sh, "cargo test --no-default-features --features critical-section --release").run()?;
+        cmd!(sh, "cargo test --features critical-section").run()?;
     }
 
     {

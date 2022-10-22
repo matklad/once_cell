@@ -4,6 +4,12 @@
 
 -
 
+## 1.16.0-pre.1
+
+- Add `no_std` implementation based on `critical-section`,
+  [#195](https://github.com/matklad/once_cell/pull/195).
+- Deprecate `atomic-polyfill` feature (use the new `critical-section` instead)
+
 ## 1.15.0
 
 - Increase minimal supported Rust version to 1.56.0.
