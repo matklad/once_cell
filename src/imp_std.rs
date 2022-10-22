@@ -78,7 +78,7 @@ impl<T> OnceCell<T> {
         initialize_or_wait(
             &self.queue,
             Some(&mut || {
-                let f = unsafe { crate::take_unchecked(&mut f) };
+                let f = unsafe { crate::unwrap_unchecked(f.take()) };
                 match f() {
                     Ok(value) => {
                         unsafe { *slot = Some(value) };

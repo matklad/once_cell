@@ -474,18 +474,6 @@ pub mod unsync {
             unsafe { &mut *self.inner.get() }.as_mut()
         }
 
-        /// Get the reference to the underlying value, without checking if the
-        /// cell is initialized.
-        ///
-        /// # Safety
-        ///
-        /// Caller must ensure that the cell is in initialized state.
-        #[cfg(feature = "critical-section")]
-        #[inline]
-        pub(crate) unsafe fn get_unchecked(&self) -> &T {
-            crate::unwrap_unchecked(self.get())
-        }
-
         /// Sets the contents of this cell to `value`.
         ///
         /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
@@ -830,7 +818,7 @@ pub mod unsync {
 }
 
 /// Thread-safe, blocking version of `OnceCell`.
-#[cfg(feature = "sync")]
+#[cfg(any(feature = "std", feature = "critical-section"))]
 pub mod sync {
     use core::{
         cell::Cell,
@@ -839,7 +827,7 @@ pub mod sync {
         panic::RefUnwindSafe,
     };
 
-    use super::{imp::OnceCell as Imp, take_unchecked};
+    use super::{imp::OnceCell as Imp, unwrap_unchecked};
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -960,7 +948,7 @@ pub mod sync {
         /// assert_eq!(*value, 92);
         /// t.join().unwrap();
         /// ```
-        #[cfg(not(feature = "critical-section"))]
+        #[cfg(feature = "std")]
         pub fn wait(&self) -> &T {
             if !self.0.is_initialized() {
                 self.0.wait()
@@ -1050,7 +1038,7 @@ pub mod sync {
         /// ```
         pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
             let mut value = Some(value);
-            let res = self.get_or_init(|| unsafe { take_unchecked(&mut value) });
+            let res = self.get_or_init(|| unsafe { unwrap_unchecked(value.take()) });
             match value {
                 None => Ok(res),
                 Some(value) => Err((res, value)),
@@ -1377,12 +1365,7 @@ pub mod sync {
 #[cfg(feature = "race")]
 pub mod race;
 
-#[cfg(feature = "sync")]
-#[inline]
-unsafe fn take_unchecked<T>(val: &mut Option<T>) -> T {
-    unwrap_unchecked(val.take())
-}
-
+// Remove once MSRV is at least 1.58.
 #[inline]
 unsafe fn unwrap_unchecked<T>(val: Option<T>) -> T {
     match val {
