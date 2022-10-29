@@ -4,7 +4,7 @@
 
 -
 
-## 1.16.0-pre.1
+## 1.16.0
 
 - Add `no_std` implementation based on `critical-section`,
   [#195](https://github.com/matklad/once_cell/pull/195).
