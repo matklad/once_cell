@@ -11,6 +11,7 @@ fn main() -> xshell::Result<()> {
     let sh = Shell::new()?;
 
     let _e = push_toolchain(&sh, "stable")?;
+    let _e = sh.push_env("CARGO", "");
 
     {
         let _s = section("BUILD");
