@@ -206,11 +206,8 @@
 //!
 //!
 //! ```
-//! use std::fmt;
-//!
 //! use once_cell::sync::OnceCell;
 //!
-//! #[derive(Debug)]
 //! pub struct LateInit<T> { cell: OnceCell<T> }
 //!
 //! impl<T> LateInit<T> {
@@ -240,24 +237,14 @@
 //!     a: LateInit<&'a A<'a>>
 //! }
 //!
-//! impl fmt::Debug for A<'_> {
-//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//!         write!(f, "A")
-//!     }
-//! }
-//!
-//! impl fmt::Debug for B<'_> {
-//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//!         write!(f, "B")
-//!     }
-//! }
 //!
 //! fn build_cycle() {
 //!     let a = A::default();
 //!     let b = B::default();
 //!     a.b.init(&b);
 //!     b.a.init(&a);
-//!     println!("{:?}", a.b.a.b.a);
+//!     
+//!     let _a = &a.b.a.b.a;
 //! }
 //! ```
 //!
