@@ -208,7 +208,6 @@
 //! ```
 //! use once_cell::sync::OnceCell;
 //!
-//! #[derive(Debug)]
 //! pub struct LateInit<T> { cell: OnceCell<T> }
 //!
 //! impl<T> LateInit<T> {
@@ -228,22 +227,24 @@
 //!     }
 //! }
 //!
-//! #[derive(Default, Debug)]
+//! #[derive(Default)]
 //! struct A<'a> {
 //!     b: LateInit<&'a B<'a>>,
 //! }
 //!
-//! #[derive(Default, Debug)]
+//! #[derive(Default)]
 //! struct B<'a> {
 //!     a: LateInit<&'a A<'a>>
 //! }
+//!
 //!
 //! fn build_cycle() {
 //!     let a = A::default();
 //!     let b = B::default();
 //!     a.b.init(&b);
 //!     b.a.init(&a);
-//!     println!("{:?}", a.b.a.b.a);
+//!     
+//!     let _a = &a.b.a.b.a;
 //! }
 //! ```
 //!
@@ -314,9 +315,9 @@
 //! **Does this crate support async?**
 //!
 //! No, but you can use [`async_once_cell`](https://crates.io/crates/async_once_cell) instead.
-//! 
+//!
 //! **Can I bring my own mutex?**
-//! 
+//!
 //! There is [generic_once_cell](https://crates.io/crates/generic_once_cell) to allow just that.
 //!
 //! # Related crates
