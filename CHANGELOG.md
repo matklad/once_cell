@@ -4,6 +4,10 @@
 
 -
 
+## 1.17.0
+
+- Add `race::OnceRef` for storing a `&'a T`.
+
 ## 1.16.0
 
 - Add `no_std` implementation based on `critical-section`,
