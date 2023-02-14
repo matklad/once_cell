@@ -4,6 +4,10 @@
 
 -
 
+## 1.17.1
+
+- Make `OnceRef` implementation compliant with [strict provenance](https://github.com/rust-lang/rust/issues/95228).
+
 ## 1.17.0
 
 - Add `race::OnceRef` for storing a `&'a T`.
