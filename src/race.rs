@@ -57,7 +57,7 @@ impl OnceNonZeroUsize {
     #[inline]
     pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
         let exchange =
-            self.inner.compare_exchange(0, value.get(), Ordering::AcqRel, Ordering::Acquire);
+            self.inner.compare_exchange(0, value.get(), Ordering::Release, Ordering::Acquire);
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
@@ -98,7 +98,7 @@ impl OnceNonZeroUsize {
             None => {
                 let mut val = f()?.get();
                 let exchange =
-                    self.inner.compare_exchange(0, val, Ordering::AcqRel, Ordering::Acquire);
+                    self.inner.compare_exchange(0, val, Ordering::Release, Ordering::Acquire);
                 if let Err(old) = exchange {
                     val = old;
                 }
@@ -215,7 +215,7 @@ impl<'a, T> OnceRef<'a, T> {
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
         let ptr = value as *const T as *mut T;
         let exchange =
-            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire);
+            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::Release, Ordering::Acquire);
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
@@ -258,7 +258,7 @@ impl<'a, T> OnceRef<'a, T> {
             let exchange = self.inner.compare_exchange(
                 ptr::null_mut(),
                 ptr,
-                Ordering::AcqRel,
+                Ordering::Release,
                 Ordering::Acquire,
             );
             if let Err(old) = exchange {
@@ -348,7 +348,7 @@ mod once_box {
             let exchange = self.inner.compare_exchange(
                 ptr::null_mut(),
                 ptr,
-                Ordering::AcqRel,
+                Ordering::Release,
                 Ordering::Acquire,
             );
             if let Err(_) = exchange {
@@ -394,7 +394,7 @@ mod once_box {
                 let exchange = self.inner.compare_exchange(
                     ptr::null_mut(),
                     ptr,
-                    Ordering::AcqRel,
+                    Ordering::Release,
                     Ordering::Acquire,
                 );
                 if let Err(old) = exchange {
