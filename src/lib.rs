@@ -729,6 +729,25 @@ pub mod unsync {
     }
 
     impl<T, F: FnOnce() -> T> Lazy<T, F> {
+        /// An alias for `Lazy::new` which allows the compiler to infer the type of the lazy value
+        /// from the return type of the initializing function (rather than from the use-site).
+        /// # Example
+        /// ```
+        /// # fn main() {
+        /// use once_cell::unsync::Lazy;
+        ///
+        /// let hello = "Hello, World!".to_string();
+        ///
+        /// let _unused_lazy = Lazy::from_fn(|| hello.to_uppercase());
+        ///
+        /// // The type of `_unused_lazy` is inferred as `Lazy<String>` from the closure even though
+        /// // we've not given the compiler any hints by using it anywhere.
+        /// # }
+        /// ```
+        pub const fn from_fn(init: F) -> Self {
+            Self::new(init)
+        }
+
         /// Forces the evaluation of this lazy value and returns a reference to
         /// the result.
         ///
@@ -1260,6 +1279,12 @@ pub mod sync {
     }
 
     impl<T, F: FnOnce() -> T> Lazy<T, F> {
+        /// An alias for `Lazy::new` which allows the compiler to infer the type of the lazy value
+        /// from the return type of the initializing function (rather than from the use-site).
+        pub const fn from_fn(init: F) -> Self {
+            Self::new(init)
+        }
+
         /// Forces the evaluation of this lazy value and
         /// returns a reference to the result. This is equivalent
         /// to the `Deref` impl, but is explicit.
