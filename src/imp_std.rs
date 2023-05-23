@@ -209,7 +209,7 @@ fn initialize_or_wait(queue: &AtomicPtr<Waiter>, mut init: Option<&mut dyn FnMut
                 return;
             }
             (INCOMPLETE, None) | (RUNNING, _) => {
-                wait(&queue, curr_queue);
+                wait(queue, curr_queue);
                 curr_queue = queue.load(Ordering::Acquire);
             }
             _ => debug_assert!(false),

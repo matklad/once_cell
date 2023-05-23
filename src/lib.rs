@@ -638,7 +638,7 @@ pub mod unsync {
         /// cell = OnceCell::new();
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::replace(self, Self::default()).into_inner()
+            mem::take(self).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value.
@@ -1163,7 +1163,7 @@ pub mod sync {
         /// cell = OnceCell::new();
         /// ```
         pub fn take(&mut self) -> Option<T> {
-            mem::replace(self, Self::default()).into_inner()
+            mem::take(self).into_inner()
         }
 
         /// Consumes the `OnceCell`, returning the wrapped value. Returns
