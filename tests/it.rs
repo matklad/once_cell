@@ -1,7 +1,16 @@
 /// Put here any code relying on duck-typed `Lazy` and `OnceCell`, oblivious to
 /// their exact `sync` or `unsync` nature.
 macro_rules! tests_for_both {() => (
-    /* TODO */
+    /// <https://github.com/matklad/once_cell/issues/167>
+    #[test]
+    fn assert_lazy_is_covariant_in_the_ctor() {
+        #[allow(dead_code)]
+        type AnyLazy<'f, T> = Lazy<T, Box<dyn 'f + FnOnce() -> T>>;
+
+        fn _for<'short, T>(it: *const (AnyLazy<'static, T>, )) -> *const (AnyLazy<'short, T>, ) {
+            it
+        }
+    }
 )}
 
 mod unsync {
