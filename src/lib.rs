@@ -369,6 +369,8 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+mod covariant_cell_option;
+
 #[cfg(all(feature = "critical-section", not(feature = "std")))]
 #[path = "imp_cs.rs"]
 mod imp;
@@ -384,13 +386,14 @@ mod imp;
 /// Single-threaded version of `OnceCell`.
 pub mod unsync {
     use core::{
-        cell::{Cell, UnsafeCell},
+        cell::UnsafeCell,
         fmt, mem,
         ops::{Deref, DerefMut},
         panic::{RefUnwindSafe, UnwindSafe},
     };
 
     use super::unwrap_unchecked;
+    use crate::covariant_cell_option::CovariantCellOption;
 
     /// A cell which can be written to only once. It is not thread safe.
     ///
@@ -717,7 +720,7 @@ pub mod unsync {
     /// ```
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: Cell<Option<F>>,
+        init: CovariantCellOption<F>,
     }
 
     impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
@@ -744,7 +747,7 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: Cell::new(Some(init)) }
+            Lazy { cell: OnceCell::new(), init: CovariantCellOption::some(init) }
         }
 
         /// Consumes this `Lazy` returning the stored value.
@@ -861,13 +864,13 @@ pub mod unsync {
 #[cfg(any(feature = "std", feature = "critical-section"))]
 pub mod sync {
     use core::{
-        cell::Cell,
         fmt, mem,
         ops::{Deref, DerefMut},
         panic::RefUnwindSafe,
     };
 
     use super::{imp::OnceCell as Imp, unwrap_unchecked};
+    use crate::covariant_cell_option::CovariantCellOption;
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -1253,7 +1256,7 @@ pub mod sync {
     /// ```
     pub struct Lazy<T, F = fn() -> T> {
         cell: OnceCell<T>,
-        init: Cell<Option<F>>,
+        init: CovariantCellOption<F>,
     }
 
     impl<T: fmt::Debug, F> fmt::Debug for Lazy<T, F> {
@@ -1275,7 +1278,7 @@ pub mod sync {
         /// Creates a new lazy value with the given initializing
         /// function.
         pub const fn new(f: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: Cell::new(Some(f)) }
+            Lazy { cell: OnceCell::new(), init: CovariantCellOption::some(f) }
         }
 
         /// Consumes this `Lazy` returning the stored value.
