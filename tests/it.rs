@@ -1,3 +1,11 @@
+/// Put here any code relying on duck-typed `Lazy` and `OnceCell`, oblivious to
+/// their exact `sync` or `unsync` nature.
+macro_rules! tests_for_both {
+    () => {
+        /* TODO */
+    };
+}
+
 mod unsync {
     use core::{
         cell::Cell,
@@ -5,6 +13,8 @@ mod unsync {
     };
 
     use once_cell::unsync::{Lazy, OnceCell};
+
+    tests_for_both!();
 
     #[test]
     fn once_cell() {
@@ -262,6 +272,8 @@ mod sync {
     use crossbeam_utils::thread::scope;
 
     use once_cell::sync::{Lazy, OnceCell};
+
+    tests_for_both!();
 
     #[test]
     fn once_cell() {
