@@ -796,8 +796,14 @@ pub mod unsync {
         /// assert_eq!(*lazy, 92);
         /// ```
         pub fn force_mut(this: &mut Lazy<T, F>) -> &mut T {
-            Self::force(this);
-            Self::get_mut(this).unwrap_or_else(|| unreachable!())
+            if this.cell.get_mut().is_none() {
+                let value = match this.init.get_mut().take() {
+                    Some(f) => f(),
+                    None => panic!("Lazy instance has previously been poisoned"),
+                };
+                this.cell = OnceCell::with_value(value);
+            }
+            this.cell.get_mut().unwrap_or_else(|| unreachable!())
         }
 
         /// Gets the reference to the result of this lazy value if
@@ -844,8 +850,7 @@ pub mod unsync {
 
     impl<T, F: FnOnce() -> T> DerefMut for Lazy<T, F> {
         fn deref_mut(&mut self) -> &mut T {
-            Lazy::force(self);
-            self.cell.get_mut().unwrap_or_else(|| unreachable!())
+            Lazy::force_mut(self)
         }
     }
 
@@ -1324,8 +1329,14 @@ pub mod sync {
         /// assert_eq!(Lazy::force_mut(&mut lazy), &mut 92);
         /// ```
         pub fn force_mut(this: &mut Lazy<T, F>) -> &mut T {
-            Self::force(this);
-            Self::get_mut(this).unwrap_or_else(|| unreachable!())
+            if this.cell.get_mut().is_none() {
+                let value = match this.init.get_mut().take() {
+                    Some(f) => f(),
+                    None => panic!("Lazy instance has previously been poisoned"),
+                };
+                this.cell = OnceCell::with_value(value);
+            }
+            this.cell.get_mut().unwrap_or_else(|| unreachable!())
         }
 
         /// Gets the reference to the result of this lazy value if
@@ -1372,8 +1383,7 @@ pub mod sync {
 
     impl<T, F: FnOnce() -> T> DerefMut for Lazy<T, F> {
         fn deref_mut(&mut self) -> &mut T {
-            Lazy::force(self);
-            self.cell.get_mut().unwrap_or_else(|| unreachable!())
+            Lazy::force_mut(self)
         }
     }
 
