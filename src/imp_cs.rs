@@ -66,6 +66,20 @@ impl<T> OnceCell<T> {
         self.value.borrow(CriticalSection::new()).get().unwrap_unchecked()
     }
 
+    /// Gets the mutable reference to the underlying value, without checking if the cell
+    /// is initialized.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the cell is in initialized state, and that
+    /// the contents are acquired by (synchronized to) this thread.
+    pub(crate) unsafe fn get_mut_unchecked(&mut self) -> &mut T {
+        debug_assert!(self.is_initialized());
+        // SAFETY: The caller ensures that the value is initialized and access synchronized.
+        let slot = &mut *self.value.get();
+        slot.as_mut().unwrap_unchecked()
+    }
+
     #[inline]
     pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
         self.value.get_mut().get_mut()

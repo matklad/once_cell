@@ -1034,6 +1034,18 @@ pub mod sync {
             self.0.get_unchecked()
         }
 
+        /// Get the mutable reference to the underlying value, without checking if the
+        /// cell is initialized.
+        ///
+        /// # Safety
+        ///
+        /// Caller must ensure that the cell is in initialized state, and that
+        /// the contents are acquired by (synchronized to) this thread.
+        #[inline]
+        pub unsafe fn get_mut_unchecked(&mut self) -> &mut T {
+            self.0.get_mut_unchecked()
+        }
+
         /// Sets the contents of this cell to `value`.
         ///
         /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
