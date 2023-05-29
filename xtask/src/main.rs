@@ -48,7 +48,21 @@ fn main() -> xshell::Result<()> {
         let _s = section("TEST_MSRV");
         let _e = push_toolchain(&sh, MSRV)?;
         sh.copy_file("Cargo.lock.msrv", "Cargo.lock")?;
-        cmd!(sh, "cargo build").run()?;
+        if let err @ Err(_) = cmd!(sh, "cargo update -w -v --locked").run() {
+            // `Cargo.lock.msrv` is out of date! Probably from having bumped our own version number.
+            println! {"\
+                Error: `Cargo.lock.msrv` is out of date. \
+                Please run:\n    \
+                (cp Cargo.lock{{.msrv,}} && cargo +{MSRV} update -w -v && cp Cargo.lock{{.msrv,}})\n\
+                \n\
+                Alternatively, `git apply` the `.patch` below:\
+            "}
+            cmd!(sh, "cargo update -q -w").quiet().run()?;
+            sh.copy_file("Cargo.lock", "Cargo.lock.msrv")?;
+            cmd!(sh, "git --no-pager diff --color=always -- Cargo.lock.msrv").quiet().run()?;
+            return err;
+        }
+        cmd!(sh, "cargo build --locked").run()?;
     }
 
     {

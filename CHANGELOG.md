@@ -4,6 +4,10 @@
 
 -
 
+## 1.17.2
+
+- Avoid unnecessary synchronization in `Lazy::{force,deref}_mut()`, [#231](https://github.com/matklad/once_cell/pull/231).
+
 ## 1.17.1
 
 - Make `OnceRef` implementation compliant with [strict provenance](https://github.com/rust-lang/rust/issues/95228).

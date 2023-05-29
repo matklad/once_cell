@@ -45,7 +45,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51887d4adc7b564537b15adcfb307936f8075dfcd5f00dde9a9f1d29383682bc"
 dependencies = [
  "cfg-if",
- "once_cell 1.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "once_cell 1.14.0",
 ]
 
 [[package]]
@@ -69,19 +69,20 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "once_cell"
 version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f7254b99e31cad77da24b08ebf628882739a608578bb1bcdfc1f9c21260d7c0"
+
+[[package]]
+name = "once_cell"
+version = "1.17.2"
 dependencies = [
  "atomic-polyfill",
+ "critical-section",
  "crossbeam-utils",
  "lazy_static",
  "parking_lot_core",
  "regex",
 ]
-
-[[package]]
-name = "once_cell"
-version = "1.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f7254b99e31cad77da24b08ebf628882739a608578bb1bcdfc1f9c21260d7c0"
 
 [[package]]
 name = "parking_lot_core"
