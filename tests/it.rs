@@ -2,7 +2,49 @@
 /// their exact `sync` or `unsync` nature.
 macro_rules! tests_for_both {
     () => {
-        /* TODO */
+        #[test]
+        fn lazy_does_drop() {
+            type Counter = std::rc::Rc<()>;
+
+            let (counter, [c1, c2, c3]) = {
+                let c = Counter::new(());
+                (Counter::downgrade(&c), [(); 3].map(|()| c.clone()))
+            };
+            assert_eq!(counter.strong_count(), 3);
+
+            let lazy_1 = Lazy::<Counter, _>::new(|| c1);
+            assert_eq!(counter.strong_count(), 3);
+            drop(lazy_1);
+            assert_eq!(
+                counter.strong_count(),
+                2,
+                "dropping a `Lazy::Uninit` drops the `init` closure"
+            );
+
+            let lazy_2 = Lazy::<Counter, _>::new(|| c2);
+            Lazy::force(&lazy_2);
+            assert_eq!(
+                counter.strong_count(),
+                2,
+                "from `Lazy::Uninit` to `Lazy::Value` drops `init` but owns `value`"
+            );
+            drop(lazy_2);
+            assert_eq!(counter.strong_count(), 1, "dropping a `Lazy::Value` drops its `value`");
+
+            let lazy_3 = Lazy::<Counter, _>::new(|| {
+                None::<()>.unwrap();
+                c3
+            });
+            assert_eq!(counter.strong_count(), 1);
+            let _ = std::panic::catch_unwind(|| Lazy::force(&lazy_3)).expect_err("it panicked");
+            assert_eq!(
+                counter.strong_count(),
+                0,
+                "`init` closure is properly dropped despite panicking"
+            );
+            drop(lazy_3);
+            assert_eq!(counter.strong_count(), 0, "what is dead may never die 🧟");
+        }
     };
 }
 
