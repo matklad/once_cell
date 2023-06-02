@@ -716,15 +716,52 @@ pub mod unsync {
     /// //   92
     /// ```
     pub struct Lazy<T, F = fn() -> T> {
-        cell: OnceCell<T>,
-        init: Cell<Option<F>>,
+        state: Cell<State>,
+        data: Data<T, F>,
+    }
+
+    /// Discriminant of the union.
+    #[derive(Debug, Clone, Copy)]
+    enum State {
+        /// `.init` has not been taken yet.
+        Uninit,
+        /// `.init` has been *taken*, but the call has not completed (panic?), so there is no `.value` either.
+        Poisoned,
+        /// `.value` has been set.
+        Value,
+    }
+
+    // One of the rare cases `#[repr(C)]` is not needed for an union ("externally tagged `enum`" pattern)
+    union Data<T, F> {
+        /// Idea: we don't need *mutation* to dispose of `F`, we can just let it be there, inert, behind a MD.
+        ///
+        /// This makes it so we remain covariant in `F`.
+        init: mem::ManuallyDrop<F>,
+        value: mem::ManuallyDrop<UnsafeCell<T>>,
+    }
+
+    impl<T, F> Drop for Lazy<T, F> {
+        fn drop(&mut self) {
+            match self.state.get_mut() {
+                State::Value => unsafe { mem::ManuallyDrop::drop(&mut self.data.value) },
+                State::Uninit => unsafe { mem::ManuallyDrop::drop(&mut self.data.init) },
+                State::Poisoned => {}
+            }
+        }
     }
 
     impl<T, F: RefUnwindSafe> RefUnwindSafe for Lazy<T, F> where OnceCell<T>: RefUnwindSafe {}
 
     impl<T: fmt::Debug, F> fmt::Debug for Lazy<T, F> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.debug_struct("Lazy").field("cell", &self.cell).field("init", &"..").finish()
+            match self.state.get() {
+                // `Lazy("some value")`
+                State::Value => {
+                    f.debug_tuple("Lazy").field(unsafe { &*self.data.value.get() }).finish()
+                }
+                // `Uninit`, or `Poisoned`
+                state => state.fmt(f),
+            }
         }
     }
 
@@ -744,18 +781,28 @@ pub mod unsync {
         /// # }
         /// ```
         pub const fn new(init: F) -> Lazy<T, F> {
-            Lazy { cell: OnceCell::new(), init: Cell::new(Some(init)) }
+            Lazy {
+                state: Cell::new(State::Uninit),
+                data: Data { init: mem::ManuallyDrop::new(init) },
+            }
         }
 
         /// Consumes this `Lazy` returning the stored value.
         ///
         /// Returns `Ok(value)` if `Lazy` is initialized and `Err(f)` otherwise.
         pub fn into_value(this: Lazy<T, F>) -> Result<T, F> {
-            let cell = this.cell;
-            let init = this.init;
-            cell.into_inner().ok_or_else(|| {
-                init.take().unwrap_or_else(|| panic!("Lazy instance has previously been poisoned"))
-            })
+            // Safety: beyond the typical "check discriminant before accessing corresponding union variant",
+            // we have to be careful not to run `this`' `impl Drop` glue as we extract its fields,
+            // hence the initial extra layer of `ManuallyDrop`.
+            // Once that's done nothing is owned anymore, so we are free to `ManuallyDrop::take` what we want.
+            let mut this = mem::ManuallyDrop::new(this);
+            match this.state.get_mut() {
+                State::Value => {
+                    Ok(unsafe { mem::ManuallyDrop::take(&mut this.data.value) }.into_inner())
+                }
+                State::Uninit => Err(unsafe { mem::ManuallyDrop::take(&mut this.data.init) }),
+                State::Poisoned => panic!("Lazy instance has previously been poisoned"),
+            }
         }
     }
 
@@ -775,10 +822,37 @@ pub mod unsync {
         /// assert_eq!(&*lazy, &92);
         /// ```
         pub fn force(this: &Lazy<T, F>) -> &T {
-            this.cell.get_or_init(|| match this.init.take() {
-                Some(f) => f(),
-                None => panic!("Lazy instance has previously been poisoned"),
-            })
+            match this.state.get() {
+                State::Value => unsafe { &*this.data.value.get() },
+                State::Uninit => {
+                    // Safety: `<*const _>::read(&*...)` is the by-ref counterpart of `ManuallyDrop::take`.
+                    // We are allowed to `take` the `F` once we have taken its `State::Uninit` discriminant.
+                    // We cannot put `State::Value` in its stead yet in case `init()` panics.
+                    // Hence the `Poisoned` / "empty `Lazy`" state.
+                    let init = unsafe {
+                        this.state.set(State::Poisoned);
+                        <*const F>::read(&*this.data.init)
+                    };
+                    let value = init();
+                    unsafe {
+                        // Safety: here we need to tread with caution, since we need to "pick a union variant"
+                        // without accidentally asserting that the `ManuallyDrop<... T ...>` is init since it still isn't.
+                        // Hence `ptr::addr_of!`.
+                        let ptr: *const mem::ManuallyDrop<UnsafeCell<T>> =
+                            core::ptr::addr_of!(this.data.value);
+                        // There is no raw accessor on `ManuallyDrop`, but it's a `transparent` wrapper so we can
+                        // just `.cast()` that layer away.
+                        let ptr: *const UnsafeCell<T> = ptr.cast();
+                        // To handle the `UnsafeCell` layer, no need for casts, there is a dedicated API.
+                        let ptr: *mut T = UnsafeCell::raw_get(ptr);
+                        // Once we've gotten the pointer, the rest is easy: set the value and discriminants accordingly.
+                        ptr.write(value);
+                        this.state.set(State::Value);
+                        &*ptr
+                    }
+                }
+                State::Poisoned => panic!("Lazy instance has previously been poisoned"),
+            }
         }
 
         /// Forces the evaluation of this lazy value and returns a mutable reference to
@@ -796,14 +870,25 @@ pub mod unsync {
         /// assert_eq!(*lazy, 92);
         /// ```
         pub fn force_mut(this: &mut Lazy<T, F>) -> &mut T {
-            if this.cell.get_mut().is_none() {
-                let value = match this.init.get_mut().take() {
-                    Some(f) => f(),
-                    None => panic!("Lazy instance has previously been poisoned"),
-                };
-                this.cell = OnceCell::with_value(value);
+            let state = this.state.get_mut();
+            match state {
+                State::Value => unsafe { (*this.data.value).get_mut() },
+                State::Uninit => {
+                    // Safety: same reasoning as with `force`, except simpler since we can use `&mut` accesses.
+                    // (so we do not need to worry about any `UnsafeCell` shenanigans)
+                    let init = unsafe {
+                        *state = State::Poisoned;
+                        mem::ManuallyDrop::take(&mut this.data.init)
+                    };
+                    let value = mem::ManuallyDrop::new(init().into());
+                    unsafe {
+                        core::ptr::addr_of_mut!(this.data.value).write(value);
+                        *state = State::Value;
+                        (*this.data.value).get_mut()
+                    }
+                }
+                State::Poisoned => panic!("Lazy instance has previously been poisoned"),
             }
-            this.cell.get_mut().unwrap_or_else(|| unreachable!())
         }
 
         /// Gets the reference to the result of this lazy value if
@@ -820,7 +905,7 @@ pub mod unsync {
         /// assert_eq!(Lazy::get(&lazy), Some(&92));
         /// ```
         pub fn get(this: &Lazy<T, F>) -> Option<&T> {
-            this.cell.get()
+            matches!(this.state.get(), State::Value).then(|| unsafe { &*this.data.value.get() })
         }
 
         /// Gets the mutable reference to the result of this lazy value if
@@ -837,7 +922,8 @@ pub mod unsync {
         /// assert_eq!(Lazy::get_mut(&mut lazy), Some(&mut 92));
         /// ```
         pub fn get_mut(this: &mut Lazy<T, F>) -> Option<&mut T> {
-            this.cell.get_mut()
+            matches!(this.state.get_mut(), State::Value)
+                .then(|| unsafe { (*this.data.value).get_mut() })
         }
     }
 
@@ -1290,7 +1376,8 @@ pub mod sync {
             let cell = this.cell;
             let init = this.init;
             cell.into_inner().ok_or_else(|| {
-                init.take().unwrap_or_else(|| panic!("Lazy instance has previously been poisoned"))
+                init.into_inner()
+                    .unwrap_or_else(|| panic!("Lazy instance has previously been poisoned"))
             })
         }
     }
