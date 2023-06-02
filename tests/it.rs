@@ -299,6 +299,16 @@ mod unsync {
             cell.set(&s).unwrap();
         }
     }
+
+    #[test]
+    fn assert_lazy_is_covariant_in_the_ctor() {
+        #[allow(dead_code)]
+        type AnyLazy<'f, T> = Lazy<T, Box<dyn 'f + FnOnce() -> T>>;
+
+        fn _for<'short, T>(it: *const (AnyLazy<'static, T>,)) -> *const (AnyLazy<'short, T>,) {
+            it
+        }
+    }
 }
 
 #[cfg(any(feature = "std", feature = "critical-section"))]
