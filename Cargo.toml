@@ -4,7 +4,7 @@ version = "1.17.2"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.60"
 
 description = "Single assignment cells and lazy values."
 readme = "README.md"
@@ -20,17 +20,15 @@ exclude = ["*.png", "*.svg", "/Cargo.lock.msrv", "rustfmt.toml"]
 members = ["xtask"]
 
 [dependencies]
-# These optional dependencies are considered private impl details,
-# only features from `[features]` table are a part of semver-guarded API.
 parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
-atomic_polyfill = { package = "atomic-polyfill", version = "1", optional = true }
-critical_section = { package = "critical-section", version = "1", optional = true }
+atomic-polyfill = { version = "1", optional = true }
+critical-section = { version = "1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.0.0"
 crossbeam-utils = "0.8.7"
 regex =  "1.2.0"
-critical_section = { package = "critical-section", version = "1.1.1", features = ["std"] }
+critical-section = { version = "1.1.1", features = ["std"] }
 
 [features]
 default = ["std"]
@@ -47,12 +45,12 @@ race = []
 # Uses parking_lot to implement once_cell::sync::OnceCell.
 # This makes no speed difference, but makes each OnceCell<T>
 # up to 16 bytes smaller, depending on the size of the T.
-parking_lot = ["parking_lot_core"]
+parking_lot = ["dep:parking_lot_core"]
 
 # Uses `critical-section` to implement `sync` and `race` modules. in
 # `#![no_std]` mode. Please read `critical-section` docs carefully
 # before enabling this feature.
-critical-section = ["critical_section", "atomic_polyfill" ]
+critical-section = ["dep:critical-section", "dep:atomic-polyfill" ]
 
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
