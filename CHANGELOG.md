@@ -2,8 +2,12 @@
 
 ## Unreleased
 
-- `MSRV` is updated to 1.60.0 to take advantage of `dep:` features,
-  removing "implementation details" Cargo features. 
+- 
+
+## 1.18.0
+
+- `MSRV` is updated to 1.60.0 to take advantage of `dep:` syntax for cargo features,
+  removing "implementation details" from publicly visible surface.
 
 ## 1.17.2
 
