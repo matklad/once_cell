@@ -390,8 +390,6 @@ pub mod unsync {
         panic::{RefUnwindSafe, UnwindSafe},
     };
 
-    use super::unwrap_unchecked;
-
     /// A cell which can be written to only once. It is not thread safe.
     ///
     /// Unlike [`std::cell::RefCell`], a `OnceCell` provides simple `&`
@@ -563,7 +561,7 @@ pub mod unsync {
             // checked that slot is currently `None`, so this write
             // maintains the `inner`'s invariant.
             *slot = Some(value);
-            Ok(unsafe { unwrap_unchecked(slot.as_ref()) })
+            Ok(unsafe { slot.as_ref().unwrap_unchecked() })
         }
 
         /// Gets the contents of the cell, initializing it with `f`
@@ -636,7 +634,7 @@ pub mod unsync {
             // `assert`, while keeping `set/get` would be sound, but it seems
             // better to panic, rather than to silently use an old value.
             assert!(self.set(val).is_ok(), "reentrant init");
-            Ok(unsafe { unwrap_unchecked(self.get()) })
+            Ok(unsafe { self.get().unwrap_unchecked() })
         }
 
         /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
@@ -872,7 +870,7 @@ pub mod sync {
         panic::RefUnwindSafe,
     };
 
-    use super::{imp::OnceCell as Imp, unwrap_unchecked};
+    use super::imp::OnceCell as Imp;
 
     /// A thread-safe cell which can be written to only once.
     ///
@@ -1083,7 +1081,7 @@ pub mod sync {
         /// ```
         pub fn try_insert(&self, value: T) -> Result<&T, (&T, T)> {
             let mut value = Some(value);
-            let res = self.get_or_init(|| unsafe { unwrap_unchecked(value.take()) });
+            let res = self.get_or_init(|| unsafe { value.take().unwrap_unchecked() });
             match value {
                 None => Ok(res),
                 Some(value) => Err((res, value)),
@@ -1414,15 +1412,3 @@ pub mod sync {
 
 #[cfg(feature = "race")]
 pub mod race;
-
-// Remove once MSRV is at least 1.58.
-#[inline]
-unsafe fn unwrap_unchecked<T>(val: Option<T>) -> T {
-    match val {
-        Some(value) => value,
-        None => {
-            debug_assert!(false);
-            core::hint::unreachable_unchecked()
-        }
-    }
-}
