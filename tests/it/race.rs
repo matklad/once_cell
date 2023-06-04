@@ -3,9 +3,8 @@ use std::sync::Barrier;
 use std::{
     num::NonZeroUsize,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    thread::scope,
 };
-
-use crossbeam_utils::thread::scope;
 
 use once_cell::race::{OnceBool, OnceNonZeroUsize};
 
@@ -15,7 +14,7 @@ fn once_non_zero_usize_smoke_test() {
     let cell = OnceNonZeroUsize::new();
     let val = NonZeroUsize::new(92).unwrap();
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             assert_eq!(
                 cell.get_or_init(|| {
                     cnt.fetch_add(1, SeqCst);
@@ -34,8 +33,7 @@ fn once_non_zero_usize_smoke_test() {
             );
             assert_eq!(cnt.load(SeqCst), 1);
         });
-    })
-    .unwrap();
+    });
     assert_eq!(cell.get(), Some(val));
     assert_eq!(cnt.load(SeqCst), 1);
 }
@@ -66,7 +64,7 @@ fn once_non_zero_usize_first_wins() {
     let b2 = Barrier::new(2);
     let b3 = Barrier::new(2);
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             let r1 = cell.get_or_init(|| {
                 b1.wait();
                 b2.wait();
@@ -76,7 +74,7 @@ fn once_non_zero_usize_first_wins() {
             b3.wait();
         });
         b1.wait();
-        s.spawn(|_| {
+        s.spawn(|| {
             let r2 = cell.get_or_init(|| {
                 b2.wait();
                 b3.wait();
@@ -84,8 +82,7 @@ fn once_non_zero_usize_first_wins() {
             });
             assert_eq!(r2, val1);
         });
-    })
-    .unwrap();
+    });
 
     assert_eq!(cell.get(), Some(val1));
 }
@@ -95,7 +92,7 @@ fn once_bool_smoke_test() {
     let cnt = AtomicUsize::new(0);
     let cell = OnceBool::new();
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             assert_eq!(
                 cell.get_or_init(|| {
                     cnt.fetch_add(1, SeqCst);
@@ -114,8 +111,7 @@ fn once_bool_smoke_test() {
             );
             assert_eq!(cnt.load(SeqCst), 1);
         });
-    })
-    .unwrap();
+    });
     assert_eq!(cell.get(), Some(false));
     assert_eq!(cnt.load(SeqCst), 1);
 }

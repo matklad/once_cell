@@ -5,9 +5,6 @@ use std::sync::{
     Arc,
 };
 
-#[cfg(feature = "std")]
-use crossbeam_utils::thread::scope;
-
 use once_cell::race::OnceBox;
 
 #[derive(Default)]
@@ -40,13 +37,15 @@ impl Heap {
 #[cfg(feature = "std")]
 #[test]
 fn once_box_smoke_test() {
+    use std::thread::scope;
+
     let heap = Heap::default();
     let global_cnt = AtomicUsize::new(0);
     let cell = OnceBox::new();
     let b = Barrier::new(128);
     scope(|s| {
         for _ in 0..128 {
-            s.spawn(|_| {
+            s.spawn(|| {
                 let local_cnt = AtomicUsize::new(0);
                 cell.get_or_init(|| {
                     global_cnt.fetch_add(1, SeqCst);
@@ -64,8 +63,7 @@ fn once_box_smoke_test() {
                 assert_eq!(local_cnt.load(SeqCst), 1);
             });
         }
-    })
-    .unwrap();
+    });
     assert!(cell.get().is_some());
     assert!(global_cnt.load(SeqCst) > 10);
 
@@ -95,6 +93,8 @@ fn once_box_set() {
 #[cfg(feature = "std")]
 #[test]
 fn once_box_first_wins() {
+    use std::thread::scope;
+
     let cell = OnceBox::new();
     let val1 = 92;
     let val2 = 62;
@@ -103,7 +103,7 @@ fn once_box_first_wins() {
     let b2 = Barrier::new(2);
     let b3 = Barrier::new(2);
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             let r1 = cell.get_or_init(|| {
                 b1.wait();
                 b2.wait();
@@ -113,7 +113,7 @@ fn once_box_first_wins() {
             b3.wait();
         });
         b1.wait();
-        s.spawn(|_| {
+        s.spawn(|| {
             let r2 = cell.get_or_init(|| {
                 b2.wait();
                 b3.wait();
@@ -121,8 +121,7 @@ fn once_box_first_wins() {
             });
             assert_eq!(*r2, val1);
         });
-    })
-    .unwrap();
+    });
 
     assert_eq!(cell.get(), Some(&val1));
 }
