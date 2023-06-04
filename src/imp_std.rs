@@ -5,7 +5,6 @@
 
 use std::{
     cell::{Cell, UnsafeCell},
-    marker::PhantomData,
     panic::{RefUnwindSafe, UnwindSafe},
     sync::atomic::{AtomicBool, AtomicPtr, Ordering},
     thread::{self, Thread},
@@ -22,7 +21,6 @@ pub(crate) struct OnceCell<T> {
     // State is encoded in two low bits. Only `INCOMPLETE` and `RUNNING` states
     // allow waiters.
     queue: AtomicPtr<Waiter>,
-    _marker: PhantomData<*mut Waiter>,
     value: UnsafeCell<Option<T>>,
 }
 
@@ -32,7 +30,6 @@ pub(crate) struct OnceCell<T> {
 // then destroyed by A. That is, destructor observes
 // a sent value.
 unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
-unsafe impl<T: Send> Send for OnceCell<T> {}
 
 impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
 impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
@@ -41,7 +38,6 @@ impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
         OnceCell {
             queue: AtomicPtr::new(INCOMPLETE_PTR),
-            _marker: PhantomData,
             value: UnsafeCell::new(None),
         }
     }
@@ -49,7 +45,6 @@ impl<T> OnceCell<T> {
     pub(crate) const fn with_value(value: T) -> OnceCell<T> {
         OnceCell {
             queue: AtomicPtr::new(COMPLETE_PTR),
-            _marker: PhantomData,
             value: UnsafeCell::new(Some(value)),
         }
     }
