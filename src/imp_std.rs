@@ -37,17 +37,11 @@ impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
 
 impl<T> OnceCell<T> {
     pub(crate) const fn new() -> OnceCell<T> {
-        OnceCell {
-            queue: AtomicPtr::new(INCOMPLETE_PTR),
-            value: UnsafeCell::new(None),
-        }
+        OnceCell { queue: AtomicPtr::new(INCOMPLETE_PTR), value: UnsafeCell::new(None) }
     }
 
     pub(crate) const fn with_value(value: T) -> OnceCell<T> {
-        OnceCell {
-            queue: AtomicPtr::new(COMPLETE_PTR),
-            value: UnsafeCell::new(Some(value)),
-        }
+        OnceCell { queue: AtomicPtr::new(COMPLETE_PTR), value: UnsafeCell::new(Some(value)) }
     }
 
     /// Safety: synchronizes with store to value via Release/(Acquire|SeqCst).
@@ -74,7 +68,7 @@ impl<T> OnceCell<T> {
         initialize_or_wait(
             &self.queue,
             Some(&mut || {
-                let f = unsafe { crate::unwrap_unchecked(f.take()) };
+                let f = unsafe { f.take().unwrap_unchecked() };
                 match f() {
                     Ok(value) => {
                         unsafe { *slot = Some(value) };
@@ -105,7 +99,7 @@ impl<T> OnceCell<T> {
     pub(crate) unsafe fn get_unchecked(&self) -> &T {
         debug_assert!(self.is_initialized());
         let slot = &*self.value.get();
-        crate::unwrap_unchecked(slot.as_ref())
+        slot.as_ref().unwrap_unchecked()
     }
 
     /// Gets the mutable reference to the underlying value.
