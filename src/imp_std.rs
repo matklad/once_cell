@@ -30,6 +30,7 @@ pub(crate) struct OnceCell<T> {
 // then destroyed by A. That is, destructor observes
 // a sent value.
 unsafe impl<T: Sync + Send> Sync for OnceCell<T> {}
+unsafe impl<T: Send> Send for OnceCell<T> {}
 
 impl<T: RefUnwindSafe + UnwindSafe> RefUnwindSafe for OnceCell<T> {}
 impl<T: UnwindSafe> UnwindSafe for OnceCell<T> {}
