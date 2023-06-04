@@ -1,9 +1,8 @@
 use std::{
     cell::Cell,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    thread::scope,
 };
-
-use crossbeam_utils::thread::scope;
 
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -18,13 +17,12 @@ fn lazy_new() {
     assert_eq!(called.load(SeqCst), 0);
 
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             let y = *x - 30;
             assert_eq!(y, 62);
             assert_eq!(called.load(SeqCst), 1);
         });
-    })
-    .unwrap();
+    });
 
     let y = *x - 30;
     assert_eq!(y, 62);
@@ -120,11 +118,10 @@ fn static_lazy() {
         xs
     });
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             assert_eq!(&*XS, &vec![1, 2, 3]);
         });
-    })
-    .unwrap();
+    });
     assert_eq!(&*XS, &vec![1, 2, 3]);
 }
 

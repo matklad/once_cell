@@ -1,12 +1,13 @@
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::{
+    sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    thread::scope,
+};
 
 #[cfg(feature = "std")]
 use std::sync::Barrier;
 
 #[cfg(not(feature = "std"))]
 use core::cell::Cell;
-
-use crossbeam_utils::thread::scope;
 
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -15,12 +16,11 @@ fn once_cell() {
     let c = OnceCell::new();
     assert!(c.get().is_none());
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             c.get_or_init(|| 92);
             assert_eq!(c.get(), Some(&92));
         });
-    })
-    .unwrap();
+    });
     c.get_or_init(|| panic!("Kabom!"));
     assert_eq!(c.get(), Some(&92));
 }
@@ -61,13 +61,12 @@ fn once_cell_drop() {
 
     let x = OnceCell::new();
     scope(|s| {
-        s.spawn(|_| {
+        s.spawn(|| {
             x.get_or_init(|| Dropper);
             assert_eq!(DROP_CNT.load(SeqCst), 0);
             drop(x);
         });
-    })
-    .unwrap();
+    });
     assert_eq!(DROP_CNT.load(SeqCst), 1);
 }
 
@@ -108,11 +107,10 @@ fn get_or_try_init() {
 fn wait() {
     let cell: OnceCell<String> = OnceCell::new();
     scope(|s| {
-        s.spawn(|_| cell.set("hello".to_string()));
+        s.spawn(|| cell.set("hello".to_string()));
         let greeting = cell.wait();
         assert_eq!(greeting, "hello")
-    })
-    .unwrap();
+    });
 }
 
 #[cfg(feature = "std")]
@@ -126,7 +124,7 @@ fn get_or_init_stress() {
     scope(|s| {
         for t in 0..n_threads {
             let cells = &cells;
-            s.spawn(move |_| {
+            s.spawn(move || {
                 for (i, (b, s)) in cells.iter().enumerate() {
                     b.wait();
                     let j = if t % 2 == 0 { s.wait() } else { s.get_or_init(|| i) };
@@ -134,8 +132,7 @@ fn get_or_init_stress() {
                 }
             });
         }
-    })
-    .unwrap();
+    });
 }
 
 #[test]
@@ -260,7 +257,7 @@ fn once_cell_does_not_leak_partially_constructed_boxes() {
         let cell: OnceCell<String> = OnceCell::new();
         scope(|scope| {
             for _ in 0..n_readers {
-                scope.spawn(|_| loop {
+                scope.spawn(|| loop {
                     if let Some(msg) = cell.get() {
                         assert_eq!(msg, MSG);
                         break;
@@ -268,10 +265,9 @@ fn once_cell_does_not_leak_partially_constructed_boxes() {
                 });
             }
             for _ in 0..n_writers {
-                let _ = scope.spawn(|_| cell.set(MSG.to_owned()));
+                let _ = scope.spawn(|| cell.set(MSG.to_owned()));
             }
-        })
-        .unwrap()
+        });
     }
 }
 
@@ -281,7 +277,7 @@ fn get_does_not_block() {
     let cell = OnceCell::new();
     let barrier = Barrier::new(2);
     scope(|scope| {
-        scope.spawn(|_| {
+        scope.spawn(|| {
             cell.get_or_init(|| {
                 barrier.wait();
                 barrier.wait();
@@ -291,8 +287,7 @@ fn get_does_not_block() {
         barrier.wait();
         assert_eq!(cell.get(), None);
         barrier.wait();
-    })
-    .unwrap();
+    });
     assert_eq!(cell.get(), Some(&"hello".to_string()));
 }
 
