@@ -83,3 +83,4 @@ required-features = ["std"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--generate-link-to-definition"]
