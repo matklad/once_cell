@@ -29,7 +29,7 @@ use atomic::{AtomicPtr, AtomicUsize, Ordering};
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::num::NonZeroUsize;
-use core::{mem, ptr};
+use core::ptr;
 
 /// A thread-safe cell which can be written to only once.
 #[derive(Default, Debug)]
@@ -181,50 +181,41 @@ impl OnceBool {
 mod once_ptr {
     use super::*;
 
-    /// Common implementation for `OnceRef` and `OnceBox`.
-    pub struct OncePtrInner<T: ?Sized> {
-        /// Stores either:
-        /// - `AtomicPtr<T>` if `T: Sized`
-        /// - `(AtomicPtr<T>, AtomicUsize)` if `[T]`
-        pub ptr: UnsafeCell<*mut T>,
-    }
-
-    // SAFETY: This is semantically used like an `AtomicPtr<T>`.
-    unsafe impl<T: ?Sized> Send for OncePtrInner<T> {}
-    unsafe impl<T: ?Sized> Sync for OncePtrInner<T> {}
-
     pub trait OncePointee {
+        type OncePtr;
+
         /// The default uninitialized state.
-        const UNINIT: *mut Self;
+        const UNINIT: Self::OncePtr;
 
-        fn get(once: &OncePtrInner<Self>) -> *mut Self;
+        fn get(once_ptr: &Self::OncePtr) -> *mut Self;
 
-        fn set(once: &OncePtrInner<Self>, new: NonNull<Self>) -> Result<(), ()>;
+        fn set(once_ptr: &Self::OncePtr, new: NonNull<Self>) -> Result<(), ()>;
 
-        fn get_or_try_init<F, E>(once: &OncePtrInner<Self>, f: F) -> Result<NonNull<Self>, E>
+        fn get_or_try_init<F, E>(once_ptr: &Self::OncePtr, f: F) -> Result<NonNull<Self>, E>
         where
             F: FnOnce() -> Result<NonNull<Self>, E>;
+
+        #[cfg(feature = "alloc")]
+        unsafe fn drop_box(once_ptr: &mut Self::OncePtr);
     }
 }
 
 use once_ptr::*;
 
 impl<T> OncePointee for T {
-    const UNINIT: *mut Self = ptr::null_mut();
+    type OncePtr = AtomicPtr<T>;
 
-    fn get(once: &OncePtrInner<Self>) -> *mut Self {
-        once.atomic_ptr().load(Ordering::Acquire)
+    const UNINIT: AtomicPtr<T> = AtomicPtr::new(ptr::null_mut());
+
+    fn get(once_ptr: &AtomicPtr<T>) -> *mut Self {
+        once_ptr.load(Ordering::Acquire)
     }
 
-    fn set(once: &OncePtrInner<Self>, new: NonNull<Self>) -> Result<(), ()> {
+    fn set(once_ptr: &AtomicPtr<T>, new: NonNull<Self>) -> Result<(), ()> {
         let ptr = new.as_ptr();
 
-        let exchange = once.atomic_ptr().compare_exchange(
-            ptr::null_mut(),
-            ptr,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
+        let exchange =
+            once_ptr.compare_exchange(ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire);
 
         match exchange {
             Ok(_) => Ok(()),
@@ -232,11 +223,10 @@ impl<T> OncePointee for T {
         }
     }
 
-    fn get_or_try_init<F, E>(once: &OncePtrInner<Self>, f: F) -> Result<NonNull<Self>, E>
+    fn get_or_try_init<F, E>(once_ptr: &Self::OncePtr, f: F) -> Result<NonNull<Self>, E>
     where
         F: FnOnce() -> Result<NonNull<Self>, E>,
     {
-        let once_ptr = once.atomic_ptr();
         let mut ptr = once_ptr.load(Ordering::Acquire);
 
         if ptr.is_null() {
@@ -256,20 +246,28 @@ impl<T> OncePointee for T {
 
         Ok(unsafe { NonNull::new_unchecked(ptr) })
     }
+
+    #[cfg(feature = "alloc")]
+    unsafe fn drop_box(once_ptr: &mut AtomicPtr<T>) {
+        let ptr = *once_ptr.get_mut();
+        if !ptr.is_null() {
+            drop(alloc::boxed::Box::from_raw(ptr));
+        }
+    }
 }
 
 impl<T> OncePointee for [T] {
+    type OncePtr = (AtomicPtr<T>, AtomicUsize);
+
     // An uninitialized slice pointer has both a null address and invalid
     // length. This enables us to initialize the parts in two separate
     // operations while ensuring that concurrent readers can determine whether
     // the slice is fully initialized.
     //
     // TODO: Use `slice_from_raw_parts_mut` once stable in `const`.
-    const UNINIT: *mut Self = ptr::slice_from_raw_parts(ptr::null::<T>(), usize::MAX) as _;
+    const UNINIT: Self::OncePtr = (AtomicPtr::new(ptr::null_mut()), AtomicUsize::new(usize::MAX));
 
-    fn get(once: &OncePtrInner<Self>) -> *mut Self {
-        let (once_ptr, once_len) = once.atomic_parts();
-
+    fn get((once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize)) -> *mut Self {
         let mut ptr = ptr::null_mut();
 
         let len = once_len.load(Ordering::Acquire);
@@ -283,11 +281,12 @@ impl<T> OncePointee for [T] {
         ptr::slice_from_raw_parts_mut(ptr, len)
     }
 
-    fn set(once: &OncePtrInner<Self>, new: NonNull<Self>) -> Result<(), ()> {
+    fn set(
+        (once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize),
+        new: NonNull<Self>,
+    ) -> Result<(), ()> {
         let new_ptr = new.as_ptr() as *mut T;
-        let new_len = new.len();
-
-        let (once_ptr, once_len) = once.atomic_parts();
+        let new_len = unsafe { new.as_ref().len() };
 
         let exchange =
             once_len.compare_exchange(usize::MAX, new_len, Ordering::AcqRel, Ordering::Acquire);
@@ -302,19 +301,20 @@ impl<T> OncePointee for [T] {
         }
     }
 
-    fn get_or_try_init<F, E>(once: &OncePtrInner<Self>, f: F) -> Result<NonNull<Self>, E>
+    fn get_or_try_init<F, E>(
+        (once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize),
+        f: F,
+    ) -> Result<NonNull<Self>, E>
     where
         F: FnOnce() -> Result<NonNull<Self>, E>,
     {
-        let (once_ptr, once_len) = once.atomic_parts();
-
         let mut ptr = once_ptr.load(Ordering::Acquire);
         let mut len;
 
         if ptr.is_null() {
             let slice_ptr = f()?;
             ptr = slice_ptr.as_ptr() as *mut T;
-            len = slice_ptr.len();
+            len = unsafe { slice_ptr.as_ref().len() };
 
             // Attempt to initialize our length.
             let exchange =
@@ -348,76 +348,36 @@ impl<T> OncePointee for [T] {
 
         Ok(unsafe { NonNull::new_unchecked(ptr::slice_from_raw_parts_mut(ptr, len)) })
     }
-}
 
-impl<T: ?Sized + OncePointee> OncePtrInner<T> {
-    const fn new() -> Self {
-        Self { ptr: UnsafeCell::new(T::UNINIT) }
-    }
-}
+    #[cfg(feature = "alloc")]
+    unsafe fn drop_box((ptr, len): &mut (AtomicPtr<T>, AtomicUsize)) {
+        let ptr = *ptr.get_mut();
+        let len = *len.get_mut();
 
-impl<T> OncePtrInner<T> {
-    /// Retrieves the underlying `AtomicPtr`.
-    fn atomic_ptr(&self) -> &AtomicPtr<T> {
-        // SAFETY: `AtomicPtr<T>` is guaranteed to have the same in-memory
-        // representation as `*mut T`.
-        unsafe { &*(self.ptr.get() as *const AtomicPtr<T>) }
-    }
-}
-
-impl<T> OncePtrInner<[T]> {
-    /// `true` if the `*const [T]` address comes before the length.
-    const IS_PTR_FIRST: bool = {
-        let ptr = ptr::null::<T>();
-        let len = usize::MAX;
-        let slice: *const [T] = ptr::slice_from_raw_parts(ptr, len);
-
-        // SAFETY: Both types have the same memory layout.
-        let parts: [usize; 2] = unsafe { mem::transmute(slice) };
-
-        parts[0] != len
-    };
-
-    /// Retrieves the underlying `AtomicPtr` and `AtomicUsize`.
-    fn atomic_parts(&self) -> (&AtomicPtr<T>, &AtomicUsize) {
-        // SAFETY: `IS_PTR_FIRST` guarantees that the address and length of a
-        // `*mut [T]` are where we expect them to be. Also, `AtomicPtr<T>` and
-        // `AtomicUsize` are guaranteed to have the same in-memory
-        // representation as `*mut T` and `usize` respectively.
-        unsafe {
-            let start = self.ptr.get();
-
-            let (ptr, len) = if Self::IS_PTR_FIRST {
-                let ptr = start as *const AtomicPtr<T>;
-                (ptr, ptr.add(1) as *const AtomicUsize)
-            } else {
-                let len = start as *const AtomicUsize;
-                (len.add(1) as *const AtomicPtr<T>, len)
-            };
-
-            (&*ptr, &*len)
+        if !ptr.is_null() {
+            drop(alloc::boxed::Box::from_raw(ptr::slice_from_raw_parts_mut(ptr, len)));
         }
     }
 }
 
 /// A thread-safe cell which can be written to only once.
-pub struct OnceRef<'a, T: ?Sized> {
-    inner: OncePtrInner<T>,
+pub struct OnceRef<'a, T: ?Sized + OncePointee> {
+    inner: T::OncePtr,
     ghost: PhantomData<UnsafeCell<&'a T>>,
 }
 
 // TODO: Replace UnsafeCell with SyncUnsafeCell once stabilized
-unsafe impl<'a, T: ?Sized + Sync> Sync for OnceRef<'a, T> {}
+unsafe impl<'a, T: ?Sized + Sync + OncePointee> Sync for OnceRef<'a, T> {}
 
 impl<'a, T> core::fmt::Debug for OnceRef<'a, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "OnceRef({:?})", self.inner.atomic_ptr())
+        write!(f, "OnceRef({:?})", self.inner)
     }
 }
 
 impl<'a, T> core::fmt::Debug for OnceRef<'a, [T]> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let (ptr, _) = self.inner.atomic_parts();
+        let (ptr, _) = &self.inner;
         write!(f, "OnceRef({:?})", ptr)
     }
 }
@@ -431,7 +391,7 @@ impl<'a, T: ?Sized + OncePointee> Default for OnceRef<'a, T> {
 impl<'a, T: ?Sized + OncePointee> OnceRef<'a, T> {
     /// Creates a new empty cell.
     pub const fn new() -> OnceRef<'a, T> {
-        OnceRef { inner: OncePtrInner::new(), ghost: PhantomData }
+        OnceRef { inner: T::UNINIT, ghost: PhantomData }
     }
 
     /// Gets a reference to the underlying value.
@@ -506,23 +466,23 @@ mod once_box {
 
     use alloc::boxed::Box;
 
-    use super::{OncePointee, OncePtrInner};
+    use super::OncePointee;
 
     /// A thread-safe cell which can be written to only once.
-    pub struct OnceBox<T: ?Sized> {
-        inner: OncePtrInner<T>,
+    pub struct OnceBox<T: ?Sized + OncePointee> {
+        inner: T::OncePtr,
         ghost: PhantomData<Option<Box<T>>>,
     }
 
     impl<T> core::fmt::Debug for OnceBox<T> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            write!(f, "OnceBox({:?})", self.inner.atomic_ptr())
+            write!(f, "OnceBox({:?})", self.inner)
         }
     }
 
     impl<T> core::fmt::Debug for OnceBox<[T]> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            let (ptr, _) = self.inner.atomic_parts();
+            let (ptr, _) = &self.inner;
             write!(f, "OnceBox({:?})", ptr)
         }
     }
@@ -533,20 +493,16 @@ mod once_box {
         }
     }
 
-    impl<T: ?Sized> Drop for OnceBox<T> {
+    impl<T: ?Sized + OncePointee> Drop for OnceBox<T> {
         fn drop(&mut self) {
-            let ptr = *self.inner.ptr.get_mut();
-            if !ptr.is_null() {
-                // SAFETY: `&mut self` guarantees exclusive access to `ptr`.
-                drop(unsafe { Box::from_raw(ptr) })
-            }
+            unsafe { T::drop_box(&mut self.inner) }
         }
     }
 
     impl<T: ?Sized + OncePointee> OnceBox<T> {
         /// Creates a new empty cell.
         pub const fn new() -> OnceBox<T> {
-            OnceBox { inner: OncePtrInner::new(), ghost: PhantomData }
+            OnceBox { inner: T::UNINIT, ghost: PhantomData }
         }
 
         /// Gets a reference to the underlying value.
@@ -621,7 +577,7 @@ mod once_box {
         }
     }
 
-    unsafe impl<T: ?Sized + Sync + Send> Sync for OnceBox<T> {}
+    unsafe impl<T: ?Sized + OncePointee + Sync + Send> Sync for OnceBox<T> {}
 
     /// ```compile_fail
     /// struct S(*mut ());
