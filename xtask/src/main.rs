@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use xshell::{cmd, Shell};
 
-const MSRV: &str = "1.60.0";
+const MSRV: &str = "1.64.0";
 
 fn main() -> xshell::Result<()> {
     let sh = Shell::new()?;
