@@ -55,3 +55,17 @@ More patterns and use-cases are in the [docs](https://docs.rs/once_cell/)!
 * [generic_once_cell](https://crates.io/crates/generic_once_cell) (bring your own mutex)
 
 Parts of `once_cell` API are included into `std` [as of Rust 1.70.0](https://github.com/rust-lang/rust/pull/105587).
+
+# Minimum Supported Rust Version (MSRV)
+
+We support workflows which target up-to-date, supported versions of Rust compiler, but we also give somewhat generous grace period, as keeping perfectly up-to-date is hard.
+
+We explicitly do not support workflows which depend on using the old compiler. Making sure that the latest once_cell can be compiled with rustc packaged with debian stable is a non-goal.
+
+If users of once_cell find themselves with an outdated compiler, the following actions are suggested:
+
+ 1. Find a way to upgrade compiler
+ 2. If using old compiler is required, stick to old version of once_cell as well
+ 3. If a combination of old compiler and new once_cell is required, it's on the consumer to maintain a fork with backports.
+
+See https://github.com/matklad/once_cell/issues/201 for talk about MSRV.
