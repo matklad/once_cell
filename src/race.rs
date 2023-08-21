@@ -21,6 +21,7 @@
 
 #[cfg(feature = "critical-section")]
 use atomic_polyfill as atomic;
+use core::ptr::NonNull;
 #[cfg(not(feature = "critical-section"))]
 use core::sync::atomic;
 
@@ -175,14 +176,198 @@ impl OnceBool {
     }
 }
 
+/// Public-in-private items to support `T: Sized` and `[T]` for `OnceRef` and
+/// `OnceBox`.
+mod once_ptr {
+    use super::*;
+
+    pub trait OncePointee {
+        type OncePtr;
+
+        /// The default uninitialized state.
+        const UNINIT: Self::OncePtr;
+
+        fn get(once_ptr: &Self::OncePtr) -> *mut Self;
+
+        fn set(once_ptr: &Self::OncePtr, new: NonNull<Self>) -> Result<(), ()>;
+
+        fn get_or_try_init<F, E>(once_ptr: &Self::OncePtr, f: F) -> Result<NonNull<Self>, E>
+        where
+            F: FnOnce() -> Result<NonNull<Self>, E>;
+
+        #[cfg(feature = "alloc")]
+        unsafe fn drop_box(once_ptr: &mut Self::OncePtr);
+    }
+}
+
+use once_ptr::*;
+
+impl<T> OncePointee for T {
+    type OncePtr = AtomicPtr<T>;
+
+    const UNINIT: AtomicPtr<T> = AtomicPtr::new(ptr::null_mut());
+
+    fn get(once_ptr: &AtomicPtr<T>) -> *mut Self {
+        once_ptr.load(Ordering::Acquire)
+    }
+
+    fn set(once_ptr: &AtomicPtr<T>, new: NonNull<Self>) -> Result<(), ()> {
+        let ptr = new.as_ptr();
+
+        let exchange =
+            once_ptr.compare_exchange(ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire);
+
+        match exchange {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+
+    fn get_or_try_init<F, E>(once_ptr: &Self::OncePtr, f: F) -> Result<NonNull<Self>, E>
+    where
+        F: FnOnce() -> Result<NonNull<Self>, E>,
+    {
+        let mut ptr = once_ptr.load(Ordering::Acquire);
+
+        if ptr.is_null() {
+            ptr = f()?.as_ptr();
+
+            let exchange = once_ptr.compare_exchange(
+                ptr::null_mut(),
+                ptr,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+
+            if let Err(old) = exchange {
+                ptr = old;
+            }
+        }
+
+        Ok(unsafe { NonNull::new_unchecked(ptr) })
+    }
+
+    #[cfg(feature = "alloc")]
+    unsafe fn drop_box(once_ptr: &mut AtomicPtr<T>) {
+        let ptr = *once_ptr.get_mut();
+        if !ptr.is_null() {
+            drop(alloc::boxed::Box::from_raw(ptr));
+        }
+    }
+}
+
+impl<T> OncePointee for [T] {
+    type OncePtr = (AtomicPtr<T>, AtomicUsize);
+
+    // An uninitialized slice pointer has both a null address and invalid
+    // length. This enables us to initialize the parts in two separate
+    // operations while ensuring that concurrent readers can determine whether
+    // the slice is fully initialized.
+    //
+    // TODO: Use `slice_from_raw_parts_mut` once stable in `const`.
+    const UNINIT: Self::OncePtr = (AtomicPtr::new(ptr::null_mut()), AtomicUsize::new(usize::MAX));
+
+    fn get((once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize)) -> *mut Self {
+        let mut ptr = ptr::null_mut();
+
+        let len = once_len.load(Ordering::Acquire);
+        let len_is_init = (len as isize) >= 0;
+
+        // The pointer is not initialized until after the length is.
+        if len_is_init {
+            ptr = once_ptr.load(Ordering::Acquire);
+        }
+
+        ptr::slice_from_raw_parts_mut(ptr, len)
+    }
+
+    fn set(
+        (once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize),
+        new: NonNull<Self>,
+    ) -> Result<(), ()> {
+        let new_ptr = new.as_ptr() as *mut T;
+        let new_len = unsafe { new.as_ref().len() };
+
+        let exchange =
+            once_len.compare_exchange(usize::MAX, new_len, Ordering::AcqRel, Ordering::Acquire);
+
+        match exchange {
+            Ok(_) => {
+                // We initialized our length first, so store our pointer.
+                once_ptr.store(new_ptr, Ordering::Release);
+                Ok(())
+            }
+            Err(_) => Err(()),
+        }
+    }
+
+    fn get_or_try_init<F, E>(
+        (once_ptr, once_len): &(AtomicPtr<T>, AtomicUsize),
+        f: F,
+    ) -> Result<NonNull<Self>, E>
+    where
+        F: FnOnce() -> Result<NonNull<Self>, E>,
+    {
+        let mut ptr = once_ptr.load(Ordering::Acquire);
+        let mut len;
+
+        if ptr.is_null() {
+            let slice_ptr = f()?;
+            ptr = slice_ptr.as_ptr() as *mut T;
+            len = unsafe { slice_ptr.as_ref().len() };
+
+            // Attempt to initialize our length.
+            let exchange =
+                once_len.compare_exchange(usize::MAX, len, Ordering::AcqRel, Ordering::Acquire);
+
+            match exchange {
+                Ok(_) => {
+                    // We initialized our length first, so store our pointer.
+                    once_ptr.store(ptr, Ordering::Release);
+                }
+                Err(real_len) => {
+                    len = real_len;
+
+                    // Spin briefly until the other thread initializes the
+                    // pointer.
+                    ptr = loop {
+                        let real_ptr = once_ptr.load(Ordering::Acquire);
+                        if real_ptr.is_null() {
+                            core::hint::spin_loop();
+                        } else {
+                            break real_ptr;
+                        }
+                    }
+                }
+            }
+        } else {
+            // The pointer is not initialized until after the length is, so we
+            // can assume a valid slice.
+            len = once_len.load(Ordering::Acquire);
+        }
+
+        Ok(unsafe { NonNull::new_unchecked(ptr::slice_from_raw_parts_mut(ptr, len)) })
+    }
+
+    #[cfg(feature = "alloc")]
+    unsafe fn drop_box((ptr, len): &mut (AtomicPtr<T>, AtomicUsize)) {
+        let ptr = *ptr.get_mut();
+        let len = *len.get_mut();
+
+        if !ptr.is_null() {
+            drop(alloc::boxed::Box::from_raw(ptr::slice_from_raw_parts_mut(ptr, len)));
+        }
+    }
+}
+
 /// A thread-safe cell which can be written to only once.
-pub struct OnceRef<'a, T> {
-    inner: AtomicPtr<T>,
+pub struct OnceRef<'a, T: ?Sized + OncePointee> {
+    inner: T::OncePtr,
     ghost: PhantomData<UnsafeCell<&'a T>>,
 }
 
 // TODO: Replace UnsafeCell with SyncUnsafeCell once stabilized
-unsafe impl<'a, T: Sync> Sync for OnceRef<'a, T> {}
+unsafe impl<'a, T: ?Sized + Sync + OncePointee> Sync for OnceRef<'a, T> {}
 
 impl<'a, T> core::fmt::Debug for OnceRef<'a, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -190,36 +375,36 @@ impl<'a, T> core::fmt::Debug for OnceRef<'a, T> {
     }
 }
 
-impl<'a, T> Default for OnceRef<'a, T> {
+impl<'a, T> core::fmt::Debug for OnceRef<'a, [T]> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let (ptr, _) = &self.inner;
+        write!(f, "OnceRef({:?})", ptr)
+    }
+}
+
+impl<'a, T: ?Sized + OncePointee> Default for OnceRef<'a, T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, T> OnceRef<'a, T> {
+impl<'a, T: ?Sized + OncePointee> OnceRef<'a, T> {
     /// Creates a new empty cell.
     pub const fn new() -> OnceRef<'a, T> {
-        OnceRef { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
+        OnceRef { inner: T::UNINIT, ghost: PhantomData }
     }
 
     /// Gets a reference to the underlying value.
     pub fn get(&self) -> Option<&'a T> {
-        let ptr = self.inner.load(Ordering::Acquire);
+        let ptr = <T as OncePointee>::get(&self.inner);
         unsafe { ptr.as_ref() }
     }
 
     /// Sets the contents of this cell to `value`.
     ///
-    /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
-    /// full.
+    /// Returns `Ok(())` if the cell was empty and `Err(())` if it was full.
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
-        let ptr = value as *const T as *mut T;
-        let exchange =
-            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire);
-        match exchange {
-            Ok(_) => Ok(()),
-            Err(_) => Err(()),
-        }
+        <T as OncePointee>::set(&self.inner, NonNull::from(value))
     }
 
     /// Gets the contents of the cell, initializing it with `f` if the cell was
@@ -250,23 +435,8 @@ impl<'a, T> OnceRef<'a, T> {
     where
         F: FnOnce() -> Result<&'a T, E>,
     {
-        let mut ptr = self.inner.load(Ordering::Acquire);
-
-        if ptr.is_null() {
-            // TODO replace with `cast_mut` when MSRV reaches 1.65.0 (also in `set`)
-            ptr = f()? as *const T as *mut T;
-            let exchange = self.inner.compare_exchange(
-                ptr::null_mut(),
-                ptr,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            );
-            if let Err(old) = exchange {
-                ptr = old;
-            }
-        }
-
-        Ok(unsafe { &*ptr })
+        <T as OncePointee>::get_or_try_init(&self.inner, || f().map(NonNull::from))
+            .map(|ptr| unsafe { ptr.as_ref() })
     }
 
     /// ```compile_fail
@@ -292,51 +462,53 @@ pub use self::once_box::OnceBox;
 
 #[cfg(feature = "alloc")]
 mod once_box {
-    use super::atomic::{AtomicPtr, Ordering};
-    use core::{marker::PhantomData, ptr};
+    use core::{marker::PhantomData, ptr::NonNull};
 
     use alloc::boxed::Box;
 
+    use super::OncePointee;
+
     /// A thread-safe cell which can be written to only once.
-    pub struct OnceBox<T> {
-        inner: AtomicPtr<T>,
+    pub struct OnceBox<T: ?Sized + OncePointee> {
+        inner: T::OncePtr,
         ghost: PhantomData<Option<Box<T>>>,
     }
 
     impl<T> core::fmt::Debug for OnceBox<T> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            write!(f, "OnceBox({:?})", self.inner.load(Ordering::Relaxed))
+            write!(f, "OnceBox({:?})", self.inner)
         }
     }
 
-    impl<T> Default for OnceBox<T> {
+    impl<T> core::fmt::Debug for OnceBox<[T]> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let (ptr, _) = &self.inner;
+            write!(f, "OnceBox({:?})", ptr)
+        }
+    }
+
+    impl<T: ?Sized + OncePointee> Default for OnceBox<T> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<T> Drop for OnceBox<T> {
+    impl<T: ?Sized + OncePointee> Drop for OnceBox<T> {
         fn drop(&mut self) {
-            let ptr = *self.inner.get_mut();
-            if !ptr.is_null() {
-                drop(unsafe { Box::from_raw(ptr) })
-            }
+            unsafe { T::drop_box(&mut self.inner) }
         }
     }
 
-    impl<T> OnceBox<T> {
+    impl<T: ?Sized + OncePointee> OnceBox<T> {
         /// Creates a new empty cell.
         pub const fn new() -> OnceBox<T> {
-            OnceBox { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
+            OnceBox { inner: T::UNINIT, ghost: PhantomData }
         }
 
         /// Gets a reference to the underlying value.
         pub fn get(&self) -> Option<&T> {
-            let ptr = self.inner.load(Ordering::Acquire);
-            if ptr.is_null() {
-                return None;
-            }
-            Some(unsafe { &*ptr })
+            let ptr = <T as OncePointee>::get(&self.inner);
+            unsafe { ptr.as_ref() }
         }
 
         /// Sets the contents of this cell to `value`.
@@ -345,16 +517,15 @@ mod once_box {
         /// full.
         pub fn set(&self, value: Box<T>) -> Result<(), Box<T>> {
             let ptr = Box::into_raw(value);
-            let exchange = self.inner.compare_exchange(
-                ptr::null_mut(),
-                ptr,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            );
-            if exchange.is_err() {
+
+            let result =
+                <T as OncePointee>::set(&self.inner, unsafe { NonNull::new_unchecked(ptr) });
+
+            if result.is_err() {
                 let value = unsafe { Box::from_raw(ptr) };
                 return Err(value);
             }
+
             Ok(())
         }
 
@@ -386,27 +557,27 @@ mod once_box {
         where
             F: FnOnce() -> Result<Box<T>, E>,
         {
-            let mut ptr = self.inner.load(Ordering::Acquire);
+            let mut our_ptr: Option<NonNull<T>> = None;
 
-            if ptr.is_null() {
-                let val = f()?;
-                ptr = Box::into_raw(val);
-                let exchange = self.inner.compare_exchange(
-                    ptr::null_mut(),
-                    ptr,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                );
-                if let Err(old) = exchange {
-                    drop(unsafe { Box::from_raw(ptr) });
-                    ptr = old;
+            let ptr = <T as OncePointee>::get_or_try_init(&self.inner, || {
+                let ptr = Box::into_raw(f()?);
+                let ptr = unsafe { NonNull::new_unchecked(ptr) };
+                our_ptr = Some(ptr);
+                Ok(ptr)
+            })?;
+
+            // Deallocate our box if it's not the one that's stored.
+            if let Some(our_ptr) = our_ptr {
+                if ptr != our_ptr {
+                    drop(unsafe { Box::from_raw(our_ptr.as_ptr()) });
                 }
-            };
-            Ok(unsafe { &*ptr })
+            }
+
+            Ok(unsafe { ptr.as_ref() })
         }
     }
 
-    unsafe impl<T: Sync + Send> Sync for OnceBox<T> {}
+    unsafe impl<T: ?Sized + OncePointee + Sync + Send> Sync for OnceBox<T> {}
 
     /// ```compile_fail
     /// struct S(*mut ());

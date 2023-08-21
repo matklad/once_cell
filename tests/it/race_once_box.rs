@@ -72,6 +72,44 @@ fn once_box_smoke_test() {
     assert_eq!(heap.total(), 0);
 }
 
+#[cfg(feature = "std")]
+#[test]
+fn once_box_smoke_test_slice() {
+    use std::thread::scope;
+
+    let heap = Heap::default();
+    let global_cnt = AtomicUsize::new(0);
+    let cell = OnceBox::<[Pebble<()>]>::new();
+    let b = Barrier::new(128);
+    scope(|s| {
+        for _ in 0..128 {
+            s.spawn(|| {
+                let local_cnt = AtomicUsize::new(0);
+                cell.get_or_init(|| {
+                    global_cnt.fetch_add(1, SeqCst);
+                    local_cnt.fetch_add(1, SeqCst);
+                    b.wait();
+                    Box::new([heap.new_pebble(())])
+                });
+                assert_eq!(local_cnt.load(SeqCst), 1);
+
+                cell.get_or_init(|| {
+                    global_cnt.fetch_add(1, SeqCst);
+                    local_cnt.fetch_add(1, SeqCst);
+                    Box::new([heap.new_pebble(()), heap.new_pebble(())])
+                });
+                assert_eq!(local_cnt.load(SeqCst), 1);
+            });
+        }
+    });
+    assert!(cell.get().is_some());
+    assert!(global_cnt.load(SeqCst) > 10);
+
+    assert_eq!(heap.total(), 1);
+    drop(cell);
+    assert_eq!(heap.total(), 0);
+}
+
 #[test]
 fn once_box_set() {
     let heap = Heap::default();
@@ -84,6 +122,24 @@ fn once_box_set() {
 
     assert!(cell.set(Box::new(heap.new_pebble("world"))).is_err());
     assert_eq!(cell.get().unwrap().val, "hello");
+    assert_eq!(heap.total(), 1);
+
+    drop(cell);
+    assert_eq!(heap.total(), 0);
+}
+
+#[test]
+fn once_box_set_slice() {
+    let heap = Heap::default();
+    let cell = OnceBox::<[Pebble<&str>]>::new();
+    assert!(cell.get().is_none());
+
+    assert!(cell.set(Box::new([heap.new_pebble("hello")])).is_ok());
+    assert_eq!(cell.get().unwrap()[0].val, "hello");
+    assert_eq!(heap.total(), 1);
+
+    assert!(cell.set(Box::new([heap.new_pebble("world"), heap.new_pebble("!")])).is_err());
+    assert_eq!(cell.get().unwrap()[0].val, "hello");
     assert_eq!(heap.total(), 1);
 
     drop(cell);
@@ -126,6 +182,42 @@ fn once_box_first_wins() {
     assert_eq!(cell.get(), Some(&val1));
 }
 
+#[cfg(feature = "std")]
+#[test]
+fn once_box_first_wins_slice() {
+    use std::thread::scope;
+
+    let cell = OnceBox::<[i32]>::new();
+    let val1 = [92];
+    let val2 = [62];
+
+    let b1 = Barrier::new(2);
+    let b2 = Barrier::new(2);
+    let b3 = Barrier::new(2);
+    scope(|s| {
+        s.spawn(|| {
+            let r1 = cell.get_or_init(|| {
+                b1.wait();
+                b2.wait();
+                Box::new(val1)
+            });
+            assert_eq!(*r1, val1);
+            b3.wait();
+        });
+        b1.wait();
+        s.spawn(|| {
+            let r2 = cell.get_or_init(|| {
+                b2.wait();
+                b3.wait();
+                Box::new(val2)
+            });
+            assert_eq!(*r2, val1);
+        });
+    });
+
+    assert_eq!(cell.get().unwrap(), &val1);
+}
+
 #[test]
 fn once_box_reentrant() {
     let cell = OnceBox::new();
@@ -137,9 +229,27 @@ fn once_box_reentrant() {
 }
 
 #[test]
+fn once_box_reentrant_slice() {
+    let cell = OnceBox::<[i32]>::new();
+    let res = cell.get_or_init(|| {
+        cell.get_or_init(|| Box::new([1, 2, 3]));
+        Box::new([4, 5, 6])
+    });
+    assert_eq!(res, [1, 2, 3]);
+}
+
+#[test]
 fn once_box_default() {
     struct Foo;
 
     let cell: OnceBox<Foo> = Default::default();
+    assert!(cell.get().is_none());
+}
+
+#[test]
+fn once_box_default_slice() {
+    struct Foo;
+
+    let cell: OnceBox<[Foo]> = Default::default();
     assert!(cell.get().is_none());
 }
