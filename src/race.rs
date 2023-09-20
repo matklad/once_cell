@@ -54,6 +54,7 @@ impl OnceNonZeroUsize {
     ///
     /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
     /// full.
+    #[cfg(target_has_atomic = "ptr")]
     #[inline]
     pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
         let exchange =
@@ -61,6 +62,21 @@ impl OnceNonZeroUsize {
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
+        }
+    }
+
+    /// Sets the contents of this cell to `value`.
+    ///
+    /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
+    /// full.
+    #[cfg(not(target_has_atomic = "ptr"))]
+    #[inline]
+    pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
+        if self.inner.load(Ordering::Acquire) == 0 {
+            self.inner.store(value.get(), Ordering::Release);
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
@@ -88,6 +104,7 @@ impl OnceNonZeroUsize {
     /// If several threads concurrently run `get_or_init`, more than one `f` can
     /// be called. However, all threads will return the same value, produced by
     /// some `f`.
+    #[cfg(target_has_atomic = "ptr")]
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<NonZeroUsize, E>
     where
         F: FnOnce() -> Result<NonZeroUsize, E>,
@@ -100,6 +117,35 @@ impl OnceNonZeroUsize {
                 let exchange =
                     self.inner.compare_exchange(0, val, Ordering::AcqRel, Ordering::Acquire);
                 if let Err(old) = exchange {
+                    val = old;
+                }
+                unsafe { NonZeroUsize::new_unchecked(val) }
+            }
+        };
+        Ok(res)
+    }
+
+    /// Gets the contents of the cell, initializing it with `f` if
+    /// the cell was empty. If the cell was empty and `f` failed, an
+    /// error is returned.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
+    #[cfg(not(target_has_atomic = "ptr"))]
+    pub fn get_or_try_init<F, E>(&self, f: F) -> Result<NonZeroUsize, E>
+    where
+        F: FnOnce() -> Result<NonZeroUsize, E>,
+    {
+        let val = self.inner.load(Ordering::Acquire);
+        let res = match NonZeroUsize::new(val) {
+            Some(it) => it,
+            None => {
+                let mut val = f()?.get();
+                let old = self.inner.load(Ordering::Acquire);
+                if old == 0 {
+                    self.inner.store(val, Ordering::Release);
+                } else {
                     val = old;
                 }
                 unsafe { NonZeroUsize::new_unchecked(val) }
@@ -212,6 +258,7 @@ impl<'a, T> OnceRef<'a, T> {
     ///
     /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
     /// full.
+    #[cfg(target_has_atomic = "ptr")]
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
         let ptr = value as *const T as *mut T;
         let exchange =
@@ -219,6 +266,21 @@ impl<'a, T> OnceRef<'a, T> {
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
+        }
+    }
+
+    /// Sets the contents of this cell to `value`.
+    ///
+    /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
+    /// full.
+    #[cfg(not(target_has_atomic = "ptr"))]
+    pub fn set(&self, value: &'a T) -> Result<(), ()> {
+        let ptr = value as *const T as *mut T;
+        if self.inner.load(Ordering::Acquire) == ptr::null_mut() {
+            self.inner.store(ptr, Ordering::Release);
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
@@ -246,6 +308,7 @@ impl<'a, T> OnceRef<'a, T> {
     /// If several threads concurrently run `get_or_init`, more than one `f` can
     /// be called. However, all threads will return the same value, produced by
     /// some `f`.
+    #[cfg(target_has_atomic = "ptr")]
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&'a T, E>
     where
         F: FnOnce() -> Result<&'a T, E>,
@@ -262,6 +325,34 @@ impl<'a, T> OnceRef<'a, T> {
                 Ordering::Acquire,
             );
             if let Err(old) = exchange {
+                ptr = old;
+            }
+        }
+
+        Ok(unsafe { &*ptr })
+    }
+
+    /// Gets the contents of the cell, initializing it with `f` if
+    /// the cell was empty. If the cell was empty and `f` failed, an
+    /// error is returned.
+    ///
+    /// If several threads concurrently run `get_or_init`, more than one `f` can
+    /// be called. However, all threads will return the same value, produced by
+    /// some `f`.
+    #[cfg(not(target_has_atomic = "ptr"))]
+    pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&'a T, E>
+    where
+        F: FnOnce() -> Result<&'a T, E>,
+    {
+        let mut ptr = self.inner.load(Ordering::Acquire);
+
+        if ptr.is_null() {
+            // TODO replace with `cast_mut` when MSRV reaches 1.65.0 (also in `set`)
+            ptr = f()? as *const T as *mut T;
+            let old = self.inner.load(Ordering::Acquire);
+            if old == ptr::null_mut() {
+                self.inner.store(ptr, Ordering::Release);
+            } else {
                 ptr = old;
             }
         }
@@ -343,6 +434,7 @@ mod once_box {
         ///
         /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
         /// full.
+        #[cfg(target_has_atomic = "ptr")]
         pub fn set(&self, value: Box<T>) -> Result<(), Box<T>> {
             let ptr = Box::into_raw(value);
             let exchange = self.inner.compare_exchange(
@@ -356,6 +448,22 @@ mod once_box {
                 return Err(value);
             }
             Ok(())
+        }
+
+        /// Sets the contents of this cell to `value`.
+        ///
+        /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
+        /// full.
+        #[cfg(not(target_has_atomic = "ptr"))]
+        pub fn set(&self, value: Box<T>) -> Result<(), Box<T>> {
+            let ptr = Box::into_raw(value);
+            if self.inner.load(Ordering::Acquire) == ptr::null_mut() {
+                self.inner.store(ptr, Ordering::Release);
+                Ok(())
+            } else {
+                let value = unsafe { Box::from_raw(ptr) };
+                Err(value)
+            }
         }
 
         /// Gets the contents of the cell, initializing it with `f` if the cell was
@@ -382,6 +490,7 @@ mod once_box {
         /// If several threads concurrently run `get_or_init`, more than one `f` can
         /// be called. However, all threads will return the same value, produced by
         /// some `f`.
+        #[cfg(target_has_atomic = "ptr")]
         pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
         where
             F: FnOnce() -> Result<Box<T>, E>,
@@ -398,6 +507,34 @@ mod once_box {
                     Ordering::Acquire,
                 );
                 if let Err(old) = exchange {
+                    drop(unsafe { Box::from_raw(ptr) });
+                    ptr = old;
+                }
+            };
+            Ok(unsafe { &*ptr })
+        }
+
+        /// Gets the contents of the cell, initializing it with `f` if
+        /// the cell was empty. If the cell was empty and `f` failed, an
+        /// error is returned.
+        ///
+        /// If several threads concurrently run `get_or_init`, more than one `f` can
+        /// be called. However, all threads will return the same value, produced by
+        /// some `f`.
+        #[cfg(not(target_has_atomic = "ptr"))]
+        pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
+        where
+            F: FnOnce() -> Result<Box<T>, E>,
+        {
+            let mut ptr = self.inner.load(Ordering::Acquire);
+
+            if ptr.is_null() {
+                let val = f()?;
+                ptr = Box::into_raw(val);
+                let old = self.inner.load(Ordering::Acquire);
+                if old == ptr::null_mut() {
+                    self.inner.store(ptr, Ordering::Release);
+                } else {
                     drop(unsafe { Box::from_raw(ptr) });
                     ptr = old;
                 }
