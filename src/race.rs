@@ -171,7 +171,21 @@ impl OnceBool {
 
     #[inline]
     fn to_usize(value: bool) -> NonZeroUsize {
-        unsafe { NonZeroUsize::new_unchecked(if value { 1 } else { 2 }) }
+        const fn new_nonzero_usize(n: usize) -> NonZeroUsize {
+            match NonZeroUsize::new(n) {
+                Some(n) => n,
+                None => unreachable!(),
+            }
+        }
+
+        const ONE: NonZeroUsize = new_nonzero_usize(1);
+        const TWO: NonZeroUsize = new_nonzero_usize(2);
+
+        if value {
+            ONE
+        } else {
+            TWO
+        }
     }
 }
 
