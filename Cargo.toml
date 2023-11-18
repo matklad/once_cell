@@ -21,7 +21,7 @@ members = ["xtask"]
 
 [dependencies]
 parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
-atomic-polyfill = { version = "1", optional = true }
+portable-atomic = { version = "1", optional = true }
 critical-section = { version = "1", optional = true }
 
 [dev-dependencies]
@@ -48,14 +48,11 @@ parking_lot = ["dep:parking_lot_core"]
 # Uses `critical-section` to implement `sync` and `race` modules. in
 # `#![no_std]` mode. Please read `critical-section` docs carefully
 # before enabling this feature.
-critical-section = ["dep:critical-section", "dep:atomic-polyfill" ]
+critical-section = ["dep:critical-section", "portable-atomic" ]
 
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
 unstable = []
-
-# Only for backwards compatibility.
-atomic-polyfill = ["critical-section"]
 
 [[example]]
 name = "bench"
