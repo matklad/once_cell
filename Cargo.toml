@@ -54,6 +54,9 @@ critical-section = ["dep:critical-section", "portable-atomic" ]
 # At the moment, this feature is unused.
 unstable = []
 
+# Only for backwards compatibility.
+atomic-polyfill = ["critical-section"]
+
 [[example]]
 name = "bench"
 required-features = ["std"]
