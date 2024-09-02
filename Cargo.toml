@@ -48,7 +48,7 @@ parking_lot = ["dep:parking_lot_core"]
 # Uses `critical-section` to implement `sync` and `race` modules. in
 # `#![no_std]` mode. Please read `critical-section` docs carefully
 # before enabling this feature.
-critical-section = ["dep:critical-section", "portable-atomic" ]
+critical-section = ["dep:critical-section", "portable-atomic/critical-section"]
 
 # Enables semver-exempt APIs of this crate.
 # At the moment, this feature is unused.
