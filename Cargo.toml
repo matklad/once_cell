@@ -31,11 +31,10 @@ critical-section = { version = "1.1.1", features = ["std"] }
 [features]
 default = ["std"]
 
-# Enables `once_cell::sync` module.
-std = ["alloc"]
+# Enables `once_cell::sync` and `once_cell::race` modules.
+std = ["alloc", "race"]
 
-# Enables `once_cell::race::OnceBox` type.
-alloc = ["race"]
+alloc = []
 
 # Enables `once_cell::race` module.
 race = []
