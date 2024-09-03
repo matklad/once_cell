@@ -20,7 +20,7 @@ exclude = ["*.png", "*.svg", "/Cargo.lock.msrv", "rustfmt.toml"]
 members = ["xtask"]
 
 [dependencies]
-parking_lot_core = { version = "0.9.3", optional = true, default_features = false }
+parking_lot_core = { version = "0.9.3", optional = true, default-features = false }
 portable-atomic = { version = "1", optional = true }
 critical-section = { version = "1", optional = true }
 
