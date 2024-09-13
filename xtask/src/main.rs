@@ -21,6 +21,8 @@ fn main() -> xshell::Result<()> {
     {
         let _s = section("TEST");
 
+        cmd!(sh, "cargo test --workspace").run()?;
+
         for &release in &[None, Some("--release")] {
             cmd!(sh, "cargo test --features unstable {release...}").run()?;
             cmd!(
