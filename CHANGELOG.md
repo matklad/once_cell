@@ -4,6 +4,10 @@
 
 - 
 
+## 1.20.0
+
+- propagate `critical-section` feature selection into `portable-atomic`; other minor updates [#260](https://github.com/matklad/once_cell/pull/260)
+
 ## 1.19.0
 
 - Use `portable-atomic` instead of `atomic-polyfill`, [#251](https://github.com/matklad/once_cell/pull/251).
