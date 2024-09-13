@@ -43,6 +43,11 @@ fn main() -> xshell::Result<()> {
     {
         let _s = section("TEST_BETA");
         let _e = push_toolchain(&sh, "beta")?;
+        // TEMPORARY WORKAROUND for Rust compiler issue ref:
+        // - https://github.com/rust-lang/rust/issues/129352
+        // - https://github.com/matklad/once_cell/issues/261
+        let _e = sh.push_env("RUSTFLAGS", "-A unreachable_patterns");
+
         cmd!(sh, "cargo test --features unstable").run()?;
     }
 
