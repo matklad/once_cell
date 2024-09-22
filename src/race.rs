@@ -19,9 +19,9 @@
 //! `Acquire` and `Release` have very little performance overhead on most
 //! architectures versus `Relaxed`.
 
-#[cfg(not(feature = "critical-section"))]
+#[cfg(not(feature = "portable-atomic"))]
 use core::sync::atomic;
-#[cfg(feature = "critical-section")]
+#[cfg(feature = "portable-atomic")]
 use portable_atomic as atomic;
 
 use atomic::{AtomicPtr, AtomicUsize, Ordering};
