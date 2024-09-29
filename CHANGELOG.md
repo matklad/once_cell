@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-- 
+-
 
-## 1.20.0
+## 1.20.1
 
-- propagate `critical-section` feature selection into `portable-atomic`; other minor updates [#260](https://github.com/matklad/once_cell/pull/260)
+- Allow using `race` module using just `portable_atomic`, without `critical_section` and provide
+  better error messages on targets without atomic CAS instruction,
+  [#265](https://github.com/matklad/once_cell/pull/265).
 
 ## 1.19.0
 
