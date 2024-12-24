@@ -562,6 +562,40 @@ pub mod unsync {
             Ok(unsafe { slot.as_ref().unwrap_unchecked() })
         }
 
+        /// Gets the contents of the cell, initializing it with `Default` if the cell
+        /// was empty.
+        ///
+        /// # Panics
+        ///
+        /// If `Default` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::unsync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// let value: &i32 = cell.get_or_default();
+        /// assert_eq!(value, &0);
+        /// // panic below
+        /// #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
+        /// struct Number(i32);
+        /// impl Default for Number {
+        ///     fn default() -> Self {
+        ///         panic!()
+        ///     }
+        /// }
+        /// // let cell = OnceCell::new();
+        /// // let value: &Number = cell.get_or_default();
+        /// // assert_eq!(value, &Number(0));
+        /// ```
+        pub fn get_or_default(&self) -> &T
+        where
+            T: Default,
+        {
+            self.get_or_init(T::default)
+        }
+
         /// Gets the contents of the cell, initializing it with `f`
         /// if the cell was empty.
         ///
@@ -1084,6 +1118,42 @@ pub mod sync {
                 None => Ok(res),
                 Some(value) => Err((res, value)),
             }
+        }
+
+        /// Gets the contents of the cell, initializing it with `Default` if the cell
+        /// was empty.
+        ///
+        /// Many threads may call `get_or_default` concurrently.
+        ///
+        /// # Panics
+        ///
+        /// If `Default` panics, the panic is propagated to the caller, and the cell
+        /// remains uninitialized.
+        ///
+        /// # Example
+        /// ```
+        /// use once_cell::sync::OnceCell;
+        ///
+        /// let cell = OnceCell::new();
+        /// let value: &i32 = cell.get_or_default();
+        /// assert_eq!(value, &0);
+        /// // panic below
+        /// #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
+        /// struct Number(i32);
+        /// impl Default for Number {
+        ///     fn default() -> Self {
+        ///         panic!()
+        ///     }
+        /// }
+        /// // let cell = OnceCell::new();
+        /// // let value: &Number = cell.get_or_default();
+        /// // assert_eq!(value, &Number(0));
+        /// ```
+        pub fn get_or_default(&self) -> &T
+        where
+            T: Default,
+        {
+            self.get_or_init(T::default)
         }
 
         /// Gets the contents of the cell, initializing it with `f` if the cell
