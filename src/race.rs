@@ -50,6 +50,30 @@ impl OnceNonZeroUsize {
         NonZeroUsize::new(val)
     }
 
+    /// Get the reference to the underlying value, without checking if the cell
+    /// is initialized.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that the cell is in initialized state, and that
+    /// the contents are acquired by (synchronized to) this thread.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    pub unsafe fn get_unchecked(&self) -> NonZeroUsize {
+        let p = self.inner.as_ptr();
+
+        // SAFETY: The caller is responsible for ensuring that the value
+        // was initialized and that the contents have been acquired by
+        // this thread. This method is only made available on a subset of
+        // targets where we are confident there will be no tearing or other
+        // interference with another thread that may be setting the value
+        // simultaneously.
+        let val = unsafe { p.read() };
+
+        // SAFETY: The caller is responsible for ensuring the value is
+        // initialized and thus not zero.
+        unsafe { NonZeroUsize::new_unchecked(val) }
+    }
+
     /// Sets the contents of this cell to `value`.
     ///
     /// Returns `Ok(())` if the cell was empty and `Err(())` if it was
