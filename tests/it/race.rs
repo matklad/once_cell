@@ -130,7 +130,7 @@ fn once_bool_set() {
 #[test]
 fn get_unchecked() {
     let cell = OnceNonZeroUsize::new();
-    cell.set(NonZeroUsize::new(92).unwrap());
+    cell.set(NonZeroUsize::new(92).unwrap()).unwrap();
     let value = unsafe { cell.get_unchecked() };
     assert_eq!(value, NonZeroUsize::new(92).unwrap());
 }

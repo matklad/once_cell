@@ -154,7 +154,7 @@ fn onece_box_with_value() {
 fn onece_box_clone() {
     let cell1 = OnceBox::new();
     let cell2 = cell1.clone();
-    cell1.set(Box::new(92));
+    cell1.set(Box::new(92)).unwrap();
     let cell3 = cell1.clone();
     assert_eq!(cell1.get(), Some(&92));
     assert_eq!(cell2.get(), None);

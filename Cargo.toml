@@ -4,7 +4,7 @@ version = "1.21.0"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.70"
 
 description = "Single assignment cells and lazy values."
 readme = "README.md"

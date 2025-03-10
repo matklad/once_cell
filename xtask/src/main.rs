@@ -5,8 +5,6 @@ use std::time::Instant;
 
 use xshell::{cmd, Shell};
 
-const MSRV: &str = "1.60.0";
-
 fn main() -> xshell::Result<()> {
     let sh = Shell::new()?;
 
@@ -53,14 +51,21 @@ fn main() -> xshell::Result<()> {
 
     {
         let _s = section("TEST_MSRV");
-        let _e = push_toolchain(&sh, MSRV)?;
+        let msrv = {
+            let manifest = sh.read_file("Cargo.toml")?;
+            let (_, suffix) = manifest.split_once("rust-version = \"").unwrap();
+            let (version, _) = suffix.split_once("\"").unwrap();
+            version.to_string()
+        };
+
+        let _e = push_toolchain(&sh, &msrv)?;
         sh.copy_file("Cargo.lock.msrv", "Cargo.lock")?;
         if let err @ Err(_) = cmd!(sh, "cargo update -w -v --locked").run() {
             // `Cargo.lock.msrv` is out of date! Probably from having bumped our own version number.
             println! {"\
                 Error: `Cargo.lock.msrv` is out of date. \
                 Please run:\n    \
-                (cp Cargo.lock{{.msrv,}} && cargo +{MSRV} update -w -v && cp Cargo.lock{{.msrv,}})\n\
+                (cp Cargo.lock{{.msrv,}} && cargo +{msrv} update -w -v && cp Cargo.lock{{.msrv,}})\n\
                 \n\
                 Alternatively, `git apply` the `.patch` below:\
             "}
