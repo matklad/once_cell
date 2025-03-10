@@ -357,6 +357,11 @@ mod once_box {
             OnceBox { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
         }
 
+        /// Creates a new cell with the given value.
+        pub fn with_value(value: Box<T>) -> Self {
+            OnceBox { inner: AtomicPtr::new(Box::into_raw(value)), ghost: PhantomData }
+        }
+
         /// Gets a reference to the underlying value.
         pub fn get(&self) -> Option<&T> {
             let ptr = self.inner.load(Ordering::Acquire);
@@ -434,6 +439,15 @@ mod once_box {
     }
 
     unsafe impl<T: Sync + Send> Sync for OnceBox<T> {}
+
+    impl<T: Clone> Clone for OnceBox<T> {
+        fn clone(&self) -> Self {
+            match self.get() {
+                Some(value) => OnceBox::with_value(Box::new(value.clone())),
+                None => OnceBox::new(),
+            }
+        }
+    }
 
     /// ```compile_fail
     /// struct S(*mut ());
