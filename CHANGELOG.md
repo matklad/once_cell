@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.21.2
+- Relax success ordering from AcqRel to Release in `race`: [#278](https://github.com/matklad/once_cell/pull/278).
+
 ## 1.21.1
 - Reduce MSRV to 1.65: [#277](https://github.com/matklad/once_cell/pull/277).
 
