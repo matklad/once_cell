@@ -1,10 +1,10 @@
 [package]
 name = "once_cell"
-version = "1.21.0"
+version = "1.21.1"
 authors = ["Aleksey Kladov <aleksey.kladov@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.65"
 
 description = "Single assignment cells and lazy values."
 readme = "README.md"

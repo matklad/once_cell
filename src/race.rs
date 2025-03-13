@@ -58,7 +58,23 @@ impl OnceNonZeroUsize {
     /// Caller must ensure that the cell is in initialized state, and that
     /// the contents are acquired by (synchronized to) this thread.
     pub unsafe fn get_unchecked(&self) -> NonZeroUsize {
-        let p = self.inner.as_ptr();
+        #[inline(always)]
+        fn as_const_ptr(r: &AtomicUsize) -> *const usize {
+            use core::mem::align_of;
+
+            let p: *const AtomicUsize = r;
+            // SAFETY: "This type has the same size and bit validity as
+            // the underlying integer type, usize. However, the alignment of
+            // this type is always equal to its size, even on targets where
+            // usize has a lesser alignment."
+            const _ALIGNMENT_COMPATIBLE: () =
+                assert!(align_of::<AtomicUsize>() % align_of::<usize>() == 0);
+            p.cast::<usize>()
+        }
+
+        // TODO(MSRV-1.70): Use `AtomicUsize::as_ptr().cast_const()`
+        // See https://github.com/rust-lang/rust/issues/138246.
+        let p = as_const_ptr(&self.inner);
 
         // SAFETY: The caller is responsible for ensuring that the value
         // was initialized and that the contents have been acquired by
