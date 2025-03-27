@@ -264,7 +264,7 @@ impl<'a, T> OnceRef<'a, T> {
     /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
     /// full.
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
-        let ptr = value as *const T as *mut T;
+        let ptr = <*const T>::cast_mut(value);
         let exchange =
             self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::Release, Ordering::Acquire);
         match exchange {
@@ -304,8 +304,8 @@ impl<'a, T> OnceRef<'a, T> {
         let mut ptr = self.inner.load(Ordering::Acquire);
 
         if ptr.is_null() {
-            // TODO replace with `cast_mut` when MSRV reaches 1.65.0 (also in `set`)
-            ptr = f()? as *const T as *mut T;
+            let value: &'a T = f()?;
+            ptr = <*const T>::cast_mut(value);
             let exchange = self.inner.compare_exchange(
                 ptr::null_mut(),
                 ptr,
