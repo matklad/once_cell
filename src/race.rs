@@ -19,6 +19,14 @@
 //! `Acquire` and `Release` have very little performance overhead on most
 //! architectures versus `Relaxed`.
 
+// The "atomic orderings" section of the documentation above promises
+// "happens-before" semantics. This drives the choice of orderings in the uses
+// of `compare_exchange` below. On success, the value was zero/null, so there
+// was nothing to acquire (there is never any `Ordering::Release` store of 0).
+// On failure, the value was nonzero, so it was initialized previously (perhaps
+// on another thread) using `Ordering::Release`, so we must use
+// `Ordering::Acquire` to ensure that store "happens-before" this load.
+
 #[cfg(not(feature = "portable-atomic"))]
 use core::sync::atomic;
 #[cfg(feature = "portable-atomic")]
@@ -98,7 +106,7 @@ impl OnceNonZeroUsize {
     #[inline]
     pub fn set(&self, value: NonZeroUsize) -> Result<(), ()> {
         let exchange =
-            self.inner.compare_exchange(0, value.get(), Ordering::AcqRel, Ordering::Acquire);
+            self.inner.compare_exchange(0, value.get(), Ordering::Release, Ordering::Acquire);
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
@@ -144,7 +152,7 @@ impl OnceNonZeroUsize {
     #[inline(never)]
     fn init<E>(&self, f: impl FnOnce() -> Result<NonZeroUsize, E>) -> Result<NonZeroUsize, E> {
         let mut val = f()?.get();
-        let exchange = self.inner.compare_exchange(0, val, Ordering::AcqRel, Ordering::Acquire);
+        let exchange = self.inner.compare_exchange(0, val, Ordering::Release, Ordering::Acquire);
         if let Err(old) = exchange {
             val = old;
         }
@@ -258,7 +266,7 @@ impl<'a, T> OnceRef<'a, T> {
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
         let ptr = value as *const T as *mut T;
         let exchange =
-            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::AcqRel, Ordering::Acquire);
+            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::Release, Ordering::Acquire);
         match exchange {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
@@ -301,7 +309,7 @@ impl<'a, T> OnceRef<'a, T> {
             let exchange = self.inner.compare_exchange(
                 ptr::null_mut(),
                 ptr,
-                Ordering::AcqRel,
+                Ordering::Release,
                 Ordering::Acquire,
             );
             if let Err(old) = exchange {
@@ -396,7 +404,7 @@ mod once_box {
             let exchange = self.inner.compare_exchange(
                 ptr::null_mut(),
                 ptr,
-                Ordering::AcqRel,
+                Ordering::Release,
                 Ordering::Acquire,
             );
             if exchange.is_err() {
@@ -442,7 +450,7 @@ mod once_box {
                 let exchange = self.inner.compare_exchange(
                     ptr::null_mut(),
                     ptr,
-                    Ordering::AcqRel,
+                    Ordering::Release,
                     Ordering::Acquire,
                 );
                 if let Err(old) = exchange {
