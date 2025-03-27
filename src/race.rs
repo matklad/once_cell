@@ -139,8 +139,7 @@ impl OnceNonZeroUsize {
     where
         F: FnOnce() -> Result<NonZeroUsize, E>,
     {
-        let val = self.inner.load(Ordering::Acquire);
-        match NonZeroUsize::new(val) {
+        match self.get() {
             Some(it) => Ok(it),
             None => self.init(f),
         }
