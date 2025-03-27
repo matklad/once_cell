@@ -8,5 +8,9 @@ mod sync_lazy;
 
 #[cfg(feature = "race")]
 mod race;
+
+#[cfg(feature = "race")]
+mod racerelaxed;
+
 #[cfg(all(feature = "race", feature = "alloc"))]
 mod race_once_box;

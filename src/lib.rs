@@ -1410,3 +1410,6 @@ pub mod sync {
 
 #[cfg(feature = "race")]
 pub mod race;
+
+#[cfg(feature = "race")]
+pub mod racerelaxed;

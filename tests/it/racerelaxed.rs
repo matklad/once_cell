@@ -6,12 +6,12 @@ use std::{
     thread::scope,
 };
 
-use once_cell::race::{OnceBool, OnceNonZeroUsize};
+use once_cell::racerelaxed::OnceNonZeroUsizeRelaxed;
 
 #[test]
 fn once_non_zero_usize_smoke_test() {
     let cnt = AtomicUsize::new(0);
-    let cell = OnceNonZeroUsize::new();
+    let cell = OnceNonZeroUsizeRelaxed::new();
     let val = NonZeroUsize::new(92).unwrap();
     scope(|s| {
         s.spawn(|| {
@@ -43,7 +43,7 @@ fn once_non_zero_usize_set() {
     let val1 = NonZeroUsize::new(92).unwrap();
     let val2 = NonZeroUsize::new(62).unwrap();
 
-    let cell = OnceNonZeroUsize::new();
+    let cell = OnceNonZeroUsizeRelaxed::new();
 
     assert!(cell.set(val1).is_ok());
     assert_eq!(cell.get(), Some(val1));
@@ -58,7 +58,7 @@ fn once_non_zero_usize_first_wins() {
     let val1 = NonZeroUsize::new(92).unwrap();
     let val2 = NonZeroUsize::new(62).unwrap();
 
-    let cell = OnceNonZeroUsize::new();
+    let cell = OnceNonZeroUsizeRelaxed::new();
 
     let b1 = Barrier::new(2);
     let b2 = Barrier::new(2);
@@ -88,48 +88,8 @@ fn once_non_zero_usize_first_wins() {
 }
 
 #[test]
-fn once_bool_smoke_test() {
-    let cnt = AtomicUsize::new(0);
-    let cell = OnceBool::new();
-    scope(|s| { 
-        s.spawn(|| {
-            assert_eq!(
-                cell.get_or_init(|| {
-                    cnt.fetch_add(1, SeqCst);
-                    false
-                }),
-                false
-            );
-            assert_eq!(cnt.load(SeqCst), 1);
-
-            assert_eq!(
-                cell.get_or_init(|| {
-                    cnt.fetch_add(1, SeqCst);
-                    false
-                }),
-                false
-            );
-            assert_eq!(cnt.load(SeqCst), 1);
-        });
-    });
-    assert_eq!(cell.get(), Some(false));
-    assert_eq!(cnt.load(SeqCst), 1);
-}
-
-#[test]
-fn once_bool_set() {
-    let cell = OnceBool::new();
-
-    assert!(cell.set(false).is_ok());
-    assert_eq!(cell.get(), Some(false));
-
-    assert!(cell.set(true).is_err());
-    assert_eq!(cell.get(), Some(false));
-}
-
-#[test]
 fn get_unchecked() {
-    let cell = OnceNonZeroUsize::new();
+    let cell = OnceNonZeroUsizeRelaxed::new();
     cell.set(NonZeroUsize::new(92).unwrap()).unwrap();
     let value = unsafe { cell.get_unchecked() };
     assert_eq!(value, NonZeroUsize::new(92).unwrap());
