@@ -47,8 +47,8 @@ pub struct OnceNonZeroUsize {
 impl OnceNonZeroUsize {
     /// Creates a new empty cell.
     #[inline]
-    pub const fn new() -> OnceNonZeroUsize {
-        OnceNonZeroUsize { inner: AtomicUsize::new(0) }
+    pub const fn new() -> Self {
+        Self { inner: AtomicUsize::new(0) }
     }
 
     /// Gets the underlying value.
@@ -169,14 +169,14 @@ pub struct OnceBool {
 impl OnceBool {
     /// Creates a new empty cell.
     #[inline]
-    pub const fn new() -> OnceBool {
-        OnceBool { inner: OnceNonZeroUsize::new() }
+    pub const fn new() -> Self {
+        Self { inner: OnceNonZeroUsize::new() }
     }
 
     /// Gets the underlying value.
     #[inline]
     pub fn get(&self) -> Option<bool> {
-        self.inner.get().map(OnceBool::from_usize)
+        self.inner.get().map(Self::from_usize)
     }
 
     /// Sets the contents of this cell to `value`.
@@ -185,7 +185,7 @@ impl OnceBool {
     /// full.
     #[inline]
     pub fn set(&self, value: bool) -> Result<(), ()> {
-        self.inner.set(OnceBool::to_usize(value))
+        self.inner.set(Self::to_usize(value))
     }
 
     /// Gets the contents of the cell, initializing it with `f` if the cell was
@@ -198,7 +198,7 @@ impl OnceBool {
     where
         F: FnOnce() -> bool,
     {
-        OnceBool::from_usize(self.inner.get_or_init(|| OnceBool::to_usize(f())))
+        Self::from_usize(self.inner.get_or_init(|| Self::to_usize(f())))
     }
 
     /// Gets the contents of the cell, initializing it with `f` if
@@ -212,7 +212,7 @@ impl OnceBool {
     where
         F: FnOnce() -> Result<bool, E>,
     {
-        self.inner.get_or_try_init(|| f().map(OnceBool::to_usize)).map(OnceBool::from_usize)
+        self.inner.get_or_try_init(|| f().map(Self::to_usize)).map(Self::from_usize)
     }
 
     #[inline]
@@ -249,8 +249,8 @@ impl<'a, T> Default for OnceRef<'a, T> {
 
 impl<'a, T> OnceRef<'a, T> {
     /// Creates a new empty cell.
-    pub const fn new() -> OnceRef<'a, T> {
-        OnceRef { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
+    pub const fn new() -> Self {
+        Self { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
     }
 
     /// Gets a reference to the underlying value.
@@ -377,13 +377,13 @@ mod once_box {
 
     impl<T> OnceBox<T> {
         /// Creates a new empty cell.
-        pub const fn new() -> OnceBox<T> {
-            OnceBox { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
+        pub const fn new() -> Self {
+            Self { inner: AtomicPtr::new(ptr::null_mut()), ghost: PhantomData }
         }
 
         /// Creates a new cell with the given value.
         pub fn with_value(value: Box<T>) -> Self {
-            OnceBox { inner: AtomicPtr::new(Box::into_raw(value)), ghost: PhantomData }
+            Self { inner: AtomicPtr::new(Box::into_raw(value)), ghost: PhantomData }
         }
 
         /// Gets a reference to the underlying value.
