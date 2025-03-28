@@ -442,22 +442,27 @@ mod once_box {
         where
             F: FnOnce() -> Result<Box<T>, E>,
         {
-            let mut ptr = self.inner.load(Ordering::Acquire);
+            match self.get() {
+                Some(val) => Ok(val),
+                None => self.init(f)
+            }
+        }
 
-            if ptr.is_null() {
-                let val = f()?;
-                ptr = Box::into_raw(val);
-                let exchange = self.inner.compare_exchange(
-                    ptr::null_mut(),
-                    ptr,
-                    Ordering::Release,
-                    Ordering::Acquire,
-                );
-                if let Err(old) = exchange {
-                    drop(unsafe { Box::from_raw(ptr) });
-                    ptr = old;
-                }
-            };
+        #[cold]
+        #[inline(never)]
+        fn init<E>(&self, f: impl FnOnce() -> Result<Box<T>, E>) -> Result<&T, E> {
+            let val = f()?;
+            let mut ptr = Box::into_raw(val);
+            let exchange = self.inner.compare_exchange(
+                ptr::null_mut(),
+                ptr,
+                Ordering::Release,
+                Ordering::Acquire,
+            );
+            if let Err(old) = exchange {
+                drop(unsafe { Box::from_raw(ptr) });
+                ptr = old;
+            }
             Ok(unsafe { &*ptr })
         }
     }
