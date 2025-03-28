@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.21.3
+
+- Outline more initialization in `race`: [#284](https://github.com/matklad/once_cell/pull/284),
+  [#285](https://github.com/matklad/once_cell/pull/285).
+
 ## 1.21.2
 - Relax success ordering from AcqRel to Release in `race`: [#278](https://github.com/matklad/once_cell/pull/278).
 
