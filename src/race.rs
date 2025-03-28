@@ -303,20 +303,25 @@ impl<'a, T> OnceRef<'a, T> {
     where
         F: FnOnce() -> Result<&'a T, E>,
     {
-        let mut ptr = self.inner.load(Ordering::Acquire);
+        match self.get() {
+            Some(val) => Ok(val),
+            None => self.init(f),
+        }
+    }
 
-        if ptr.is_null() {
-            let value: &'a T = f()?;
-            ptr = <*const T>::cast_mut(value);
-            let exchange = self.inner.compare_exchange(
-                ptr::null_mut(),
-                ptr,
-                Ordering::Release,
-                Ordering::Acquire,
-            );
-            if let Err(old) = exchange {
-                ptr = old;
-            }
+    #[cold]
+    #[inline(never)]
+    fn init<E>(&self, f: impl FnOnce() -> Result<&'a T, E>) -> Result<&'a T, E> {
+        let value: &'a T = f()?;
+        let mut ptr = <*const T>::cast_mut(value);
+        let exchange = self.inner.compare_exchange(
+            ptr::null_mut(),
+            ptr,
+            Ordering::Release,
+            Ordering::Acquire,
+        );
+        if let Err(old) = exchange {
+            ptr = old;
         }
 
         Ok(unsafe { &*ptr })
