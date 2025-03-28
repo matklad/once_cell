@@ -266,10 +266,7 @@ impl<'a, T> OnceRef<'a, T> {
     /// Returns `Ok(())` if the cell was empty and `Err(value)` if it was
     /// full.
     pub fn set(&self, value: &'a T) -> Result<(), ()> {
-        let ptr = <*const T>::cast_mut(value);
-        let exchange =
-            self.inner.compare_exchange(ptr::null_mut(), ptr, Ordering::Release, Ordering::Acquire);
-        match exchange {
+        match self.compare_exchange(value) {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
         }
@@ -312,19 +309,24 @@ impl<'a, T> OnceRef<'a, T> {
     #[cold]
     #[inline(never)]
     fn init<E>(&self, f: impl FnOnce() -> Result<&'a T, E>) -> Result<&'a T, E> {
-        let value: &'a T = f()?;
-        let mut ptr = <*const T>::cast_mut(value);
-        let exchange = self.inner.compare_exchange(
-            ptr::null_mut(),
-            ptr,
-            Ordering::Release,
-            Ordering::Acquire,
-        );
-        if let Err(old) = exchange {
-            ptr = old;
+        let mut value: &'a T = f()?;
+        if let Err(old) = self.compare_exchange(value) {
+            value = unsafe { &*old };
         }
+        Ok(value)
+    }
 
-        Ok(unsafe { &*ptr })
+    #[inline(always)]
+    fn compare_exchange(&self, value: &'a T) -> Result<(), *const T> {
+        self.inner
+            .compare_exchange(
+                ptr::null_mut(),
+                <*const T>::cast_mut(value),
+                Ordering::Release,
+                Ordering::Acquire,
+            )
+            .map(|_: *mut T| ())
+            .map_err(<*mut T>::cast_const)
     }
 
     /// ```compile_fail
