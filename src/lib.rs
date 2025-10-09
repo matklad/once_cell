@@ -1067,7 +1067,7 @@ pub mod sync {
         /// # Example
         ///
         /// ```
-        /// use once_cell::unsync::OnceCell;
+        /// use once_cell::sync::OnceCell;
         ///
         /// let cell = OnceCell::new();
         /// assert!(cell.get().is_none());
